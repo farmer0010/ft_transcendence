@@ -2,216 +2,168 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>42Cabi - Backend Test (Ver 5.0)</title>
+    <title>42Cabi - AI Backend Test</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; text-align: center; background-color: #f0f2f5; }
-        button { padding: 10px 15px; font-size: 14px; cursor: pointer; margin: 5px; border-radius: 5px; border: none; transition: 0.2s; }
-        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        body { font-family: 'Segoe UI', sans-serif; padding: 20px; text-align: center; background-color: #f0f2f5; }
         .box { border: 1px solid #ddd; padding: 20px; margin: 20px auto; max-width: 800px; border-radius: 10px; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         h3 { border-bottom: 2px solid #eee; padding-bottom: 10px; color: #333; }
-        #token-area { word-break: break-all; color: green; font-size: 12px; margin: 10px 0; background: #e8f5e9; padding: 10px; border-radius: 5px;}
-        #result { margin-top: 20px; font-weight: bold; color: #0d47a1; white-space: pre-wrap; text-align: left; background: #e3f2fd; padding: 15px; border-radius: 5px; min-height: 100px; }
-        .error { color: #b71c1c !important; background: #ffebee !important; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; color: white; }
+        button:hover { opacity: 0.9; }
+        input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; text-align: center; }
+        #result { margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 5px; text-align: left; min-height: 100px; white-space: pre-wrap; color: #0d47a1; }
+        .error { background: #ffebee !important; color: #b71c1c !important; }
 
-        /* 버튼 색상 */
-        .btn-auth { background-color: #00babc; color: white; }
-        .btn-refresh { background-color: #ff9800; color: white; }
-        .btn-info { background-color: #2196f3; color: white; }
-        .btn-lent { background-color: #4caf50; color: white; }
-        .btn-item { background-color: #9c27b0; color: white; }
-        .btn-admin { background-color: #d32f2f; color: white; }
+        /* 버튼 스타일 */
+        .btn-auth { background-color: #00babc; }
+        .btn-info { background-color: #2196f3; }
+        .btn-lent { background-color: #4caf50; }
+        .btn-return { background-color: #d32f2f; }
+        .btn-swap { background-color: #ff9800; }
 
-        input { padding: 8px; border-radius: 5px; border: 1px solid #ccc; width: 120px; text-align: center; }
+        /* 파일 입력 폼 스타일 */
+        .file-form { background: #fff3e0; padding: 15px; border-radius: 8px; margin-top: 10px; text-align: left; }
+        .file-form label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        .file-form input[type="file"] { width: 100%; border: none; padding: 5px 0; }
     </style>
 </head>
 <body>
 
-<h1>🔐 42Cabi 통합 테스트 (Ver 5.0)</h1>
+<h1>🤖 42Cabi AI 청결도 검사 테스트</h1>
 
 <div class="box">
-    <h3>1. 인증 & 조회</h3>
-    <div id="token-display">로그인이 필요합니다.</div>
-
-    <a href="/oauth2/authorization/42">
-        <button class="btn-auth">🚀 42 Login</button>
-    </a>
-    <button onclick="reissueToken()" class="btn-refresh">🔄 토큰 재발급</button>
-    <hr>
-    <button onclick="requestApi('GET', '/v4/users/me')" class="btn-info">👤 내 정보 (반납일/메모 확인)</button>
-    <button onclick="requestApi('GET', '/v4/cabinets/status-summary?floor=2')" class="btn-info">📊 2층 현황 조회</button>
+    <h3>1. 인증</h3>
+    <div id="token-display" style="color:green; margin-bottom:10px;">로그인이 필요합니다.</div>
+    <a href="/oauth2/authorization/42"><button class="btn-auth">🚀 42 Login</button></a>
+    <button onclick="requestApi('GET', '/v4/users/me')" class="btn-info">👤 내 정보 확인</button>
 </div>
 
 <div class="box">
-    <h3>2. 🏪 아이템 상점</h3>
-    <p style="font-size:12px; color:gray;">(대여권은 월간 보상으로 자동 지급됨)</p>
-    <button onclick="requestApi('POST', '/v4/store/buy/2')" class="btn-item">⏳ 연장권 (80 coin)</button>
-    <button onclick="requestApi('POST', '/v4/store/buy/3')" class="btn-item">🚚 이사권 (60 coin)</button>
-    <button onclick="requestApi('POST', '/v4/store/buy/4')" class="btn-item">🛡️ 감면권 (40 coin)</button>
+    <h3>2. 📥 대여하기</h3>
+    <label>사물함 번호: <input type="number" id="lentCabinetId" value="1001"></label>
+    <button onclick="lentCabinet()" class="btn-lent">대여 신청</button>
 </div>
 
 <div class="box">
-    <h3>3. 🔑 대여 및 반납 (메모 저장)</h3>
-    <div>
-        <label>사물함 ID: <input type="number" id="cabinetId" value="2001"></label>
-        <button onclick="lentCabinet()" class="btn-lent">📥 대여하기</button>
-    </div>
+    <h3>3. 📸 AI 반납 (사진 필수)</h3>
+    <div class="file-form">
+        <label>1. 사물함 비밀번호 (필수 4자리)</label>
+        <input type="text" id="returnShareCode" placeholder="예: 0000" maxlength="4">
 
-    <div style="margin-top: 15px; background-color: #fff3e0; padding: 15px; border-radius: 8px;">
-        <p style="margin: 0 0 10px 0; font-size: 13px; color: #ef6c00;">
-            <b>🔒 반납 시 메모 남기기</b><br>
-            다음 사용자가 사용할 자물쇠 비밀번호를 입력해주세요.
-        </p>
-        <label>비밀번호: <input type="text" id="returnMemo" placeholder="예: 0000"></label>
-        <button onclick="returnCabinet()" class="btn-lent" style="background-color: #d32f2f;">📤 반납하기</button>
-    </div>
+        <br><br>
 
-    <hr>
-    <div>
-        <button onclick="requestApi('POST', '/v4/lent/extension')" class="btn-item">⏳ 연장권 사용 (+15일)</button>
-        <button onclick="requestApi('POST', '/v4/lent/penalty-exemption')" class="btn-item">🛡️ 감면권 사용 (-2일)</button>
-    </div>
-    <div style="margin-top: 10px;">
-        <label>이사갈 ID: <input type="number" id="newCabinetId" value="2002"></label>
-        <button onclick="swapCabinet()" class="btn-item">🚚 이사권 사용</button>
+        <label>2. 사물함 내부 사진 (필수)</label>
+        <input type="file" id="returnFile" accept="image/*">
+
+        <br>
+        <button onclick="returnCabinetWithAI()" class="btn-return" style="width: 100%; margin-top: 10px;">
+            📤 AI 검사 받고 반납하기
+        </button>
     </div>
 </div>
 
 <div class="box">
-    <h3>4. 👮‍♂️ 관리자 기능 (Name 기반)</h3>
-    <div>
-        <label>User Name: <input type="text" id="adminUserName" placeholder="예: 운영담당자B"></label>
-        <button onclick="adminProvideCoin()" class="btn-admin">💰 코인 500 지급</button>
-        <button onclick="adminUpdateLogtime()" class="btn-admin">🕒 로그타임 수정 (3000분)</button>
-        <button onclick="adminSyncAllLogtime()" class="btn-admin" style="background-color: #00796b;">🔄 전체 로그타임 동기화</button>
-    </div>
-    <div style="margin-top: 10px;">
-        <label>Cab Num: <input type="number" id="forceCabinetNum" placeholder="사물함번호"></label>
-        <button onclick="adminForceReturn()" class="btn-admin">🚨 강제 반납 (BROKEN)</button>
+    <h3>4. 🚚 AI 이사 (사진 필수)</h3>
+    <div class="file-form" style="background: #e1f5fe;">
+        <label>이사갈 사물함 번호</label>
+        <input type="number" id="swapCabinetId" value="1002">
+
+        <br><br>
+
+        <label>1. 기존 사물함 비밀번호 (필수)</label>
+        <input type="text" id="swapShareCode" placeholder="예: 0000" maxlength="4">
+
+        <br><br>
+
+        <label>2. 기존 사물함 사진 (필수)</label>
+        <input type="file" id="swapFile" accept="image/*">
+
+        <br>
+        <button onclick="swapCabinetWithAI()" class="btn-swap" style="width: 100%; margin-top: 10px;">
+            🚚 AI 검사 받고 이사하기
+        </button>
     </div>
 </div>
 
 <div class="box">
     <h3>📝 결과 로그</h3>
-    <div id="result">버튼을 누르면 결과가 표시됩니다.</div>
+    <div id="result">결과가 여기에 표시됩니다.</div>
 </div>
 
 <script>
     let jwtToken = null;
 
+    // 로그인 토큰 처리
     window.onload = function() {
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         if (token) {
-            setToken(token);
+            jwtToken = token;
+            document.getElementById('token-display').innerHTML = "✅ <b>인증됨!</b>";
             window.history.replaceState({}, document.title, "/");
         }
     };
 
-    function setToken(token) {
-        jwtToken = token;
-        document.getElementById('token-display').innerHTML =
-            `✅ <b>인증됨!</b> <span style="font-size:12px;">(Access Token)</span>`;
-    }
-
-    // 2. 일반 기능 함수들
+    // 1. 대여 (기존 방식)
     function lentCabinet() {
-        const id = document.getElementById('cabinetId').value;
+        const id = document.getElementById('lentCabinetId').value;
         requestApi('POST', '/v4/lent/cabinets/' + id);
     }
 
-    // ✅ [수정됨] 반납 함수: 비밀번호(메모)를 같이 전송
-    function returnCabinet() {
-        const memo = document.getElementById('returnMemo').value;
-        if (!memo) {
-            if(!confirm("비밀번호(메모) 없이 반납하시겠습니까? (다음 사용자가 곤란할 수 있습니다)")) return;
-        }
+    // 2. AI 반납 (Multipart)
+    function returnCabinetWithAI() {
+        const shareCode = document.getElementById('returnShareCode').value;
+        const fileInput = document.getElementById('returnFile');
 
-        // DTO의 필드명 shareCode에 맞춰서 전송
-        requestApi('POST', '/v4/lent/return', {
-            shareCode: memo
-        });
+        if (!shareCode || shareCode.length !== 4) return alert("비밀번호 4자리를 입력하세요!");
+        if (fileInput.files.length === 0) return alert("사진을 선택하세요!");
+
+        const formData = new FormData();
+        formData.append("shareCode", shareCode);
+        formData.append("file", fileInput.files[0]);
+
+        uploadFile('/v4/lent/return', formData);
     }
 
-    function swapCabinet() {
-        const id = document.getElementById('newCabinetId').value;
-        // 이사갈 때도 기존 사물함 비번을 남기고 싶다면 로직 추가 가능 (현재는 그냥 호출)
-        requestApi('POST', '/v4/lent/swap/' + id);
+    // 3. AI 이사 (Multipart)
+    function swapCabinetWithAI() {
+        const newId = document.getElementById('swapCabinetId').value;
+        const shareCode = document.getElementById('swapShareCode').value;
+        const fileInput = document.getElementById('swapFile');
+
+        if (!newId) return alert("이사갈 번호를 입력하세요!");
+        if (!shareCode || shareCode.length !== 4) return alert("기존 비밀번호 4자리를 입력하세요!");
+        if (fileInput.files.length === 0) return alert("사진을 선택하세요!");
+
+        const formData = new FormData();
+        formData.append("shareCode", shareCode);
+        formData.append("file", fileInput.files[0]);
+
+        uploadFile('/v4/lent/swap/' + newId, formData);
     }
 
-    // 3. 관리자 기능 함수들
-    function adminProvideCoin() {
-        const name = document.getElementById('adminUserName').value;
-        if (!name) return alert("유저 이름을 입력하세요");
-
-        requestApi('POST', `/v4/admin/users/${name}/coin`, {
-            amount: 500,
-            reason: "테스트 지급"
-        });
-    }
-
-    function adminUpdateLogtime() {
-        const name = document.getElementById('adminUserName').value;
-        if (!name) return alert("유저 이름을 입력하세요");
-
-        requestApi('PATCH', `/v4/admin/users/${name}/logtime`, {
-            monthlyLogtime: 3000
-        });
-    }
-
-    function adminSyncAllLogtime() {
-        if(!confirm("모든 유저의 1일~어제 로그타임을 42API에서 긁어옵니다. 오래 걸릴 수 있습니다.")) return;
-        requestApi('POST', '/v4/admin/logtime/sync-all');
-    }
-
-    function adminForceReturn() {
-        const visibleNum = document.getElementById('forceCabinetNum').value;
-        if (!visibleNum) return alert("사물함 번호를 입력하세요");
-
-        requestApi('POST', `/v4/admin/cabinets/${visibleNum}/force-return`);
-    }
-
-    // 4. API 요청 통합 함수
-    function requestApi(method, url, body = null) {
-        if (!jwtToken) {
-            alert("먼저 로그인을 해주세요!");
-            return;
-        }
+    // 파일 업로드 요청 함수 (Multipart)
+    function uploadFile(url, formData) {
+        if (!jwtToken) return alert("로그인 먼저 하세요!");
 
         const resultBox = document.getElementById('result');
-        resultBox.innerText = "⏳ 요청 중...";
+        resultBox.innerText = "⏳ AI가 사진을 분석 중입니다... (잠시만 기다려주세요)";
         resultBox.className = "";
 
-        const options = {
-            method: method,
-            headers: {
-                'Authorization': 'Bearer ' + jwtToken,
-                'Content-Type': 'application/json'
-            }
-        };
-
-        if (body) {
-            options.body = JSON.stringify(body);
-        }
-
-        fetch(url, options)
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + jwtToken }, // Content-Type은 자동 설정됨
+            body: formData
+        })
             .then(async response => {
                 const text = await response.text();
-                if (!response.ok) {
-                    resultBox.className = "error";
-                    try {
-                        const json = JSON.parse(text);
-                        resultBox.innerText = `🚨 오류 (${response.status}):\n` + JSON.stringify(json, null, 2);
-                    } catch (e) {
-                        resultBox.innerText = `🚨 오류 (${response.status}):\n` + text;
-                    }
-                    return;
-                }
                 try {
                     const json = JSON.parse(text);
                     resultBox.innerText = JSON.stringify(json, null, 2);
                 } catch (e) {
                     resultBox.innerText = text;
                 }
+
+                if (!response.ok) resultBox.className = "error";
             })
             .catch(err => {
                 resultBox.className = "error";
@@ -219,19 +171,23 @@
             });
     }
 
-    function reissueToken() {
-        fetch('/v4/auth/reissue', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                if (data.accessToken) {
-                    setToken(data.accessToken);
-                    alert("토큰이 갱신되었습니다!");
-                } else {
-                    alert("재발급 실패: 로그인을 다시 해주세요.");
-                }
-            })
-            .catch(err => console.error(err));
+    // 일반 API 요청 함수 (JSON)
+    function requestApi(method, url) {
+        if (!jwtToken) return alert("로그인 먼저 하세요!");
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Authorization': 'Bearer ' + jwtToken,
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(async response => {
+                const text = await response.text();
+                document.getElementById('result').innerText = text;
+            });
     }
 </script>
+
 </body>
 </html>
