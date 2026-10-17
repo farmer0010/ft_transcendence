@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 EfficientNetV2-S PyTorch 학습 스크립트 (3-class)
 

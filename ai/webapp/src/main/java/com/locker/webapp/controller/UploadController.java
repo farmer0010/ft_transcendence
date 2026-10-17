@@ -19,17 +19,11 @@ public class UploadController {
         this.predictionService = predictionService;
     }
 
-    /**
-     * 메인 업로드 페이지
-     */
     @GetMapping("/")
     public String index() {
         return "index";
     }
 
-    /**
-     * 파일 업로드 처리
-     */
     @PostMapping("/upload")
     public String upload(@RequestParam("file") MultipartFile file, Model model) {
         if (file.isEmpty()) {
@@ -37,7 +31,6 @@ public class UploadController {
             return "index";
         }
 
-        // 이미지 파일 검증
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             model.addAttribute("error", "이미지 파일만 업로드 가능합니다.");
@@ -45,13 +38,10 @@ public class UploadController {
         }
 
         try {
-            // 1. 예측 API 호출
             Map<String, Object> prediction = predictionService.predict(file);
 
-            // 2. 파일 저장
             String savedFilename = predictionService.saveFile(file);
 
-            // 3. 결과를 모델에 추가
             model.addAttribute("prediction", prediction);
             model.addAttribute("savedFilename", savedFilename);
             model.addAttribute("originalFilename", file.getOriginalFilename());

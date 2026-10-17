@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Grad-CAM 시각화 스크립트 (PyTorch)
 
@@ -21,7 +20,6 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torchvision.models import efficientnet_v2_s
 
-# 프로젝트 루트
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -29,7 +27,6 @@ from config import MODEL_PATH, IMAGE_SIZE, DEFAULT_CONFIG
 from app.classifier import get_classifier
 from app.preprocess import preprocess_image
 
-# 설정
 OUTPUT_DIR = "data/visualizations/gradcam"
 THRESHOLD = DEFAULT_CONFIG.get('threshold', 0.6)
 
@@ -133,7 +130,6 @@ def _resolve_weights_path() -> str:
             if candidate.exists():
                 return str(candidate)
 
-        # 기본 규칙
         if model_path.name.endswith("_traced.pt"):
             candidate = model_path.with_name(model_path.name.replace("_traced.pt", ".pth"))
             if candidate.exists():
@@ -142,7 +138,6 @@ def _resolve_weights_path() -> str:
         if candidate.exists():
             return str(candidate)
 
-        # 최후: models 디렉토리에서 가장 최신 .pth 선택
         models_dir = model_path.parent if model_path.parent.exists() else Path("models")
         if models_dir.exists():
             pths = sorted(models_dir.glob("*.pth"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -174,7 +169,6 @@ def visualize_gradcam(image_path: str, save: bool = True):
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 예측 (TorchScript classifier 사용)
     classifier = get_classifier()
     classifier.load_model()
     status, confidence, proba = classifier.predict(img_rgb)
@@ -193,7 +187,6 @@ def visualize_gradcam(image_path: str, save: bool = True):
     img_resized = cv2.resize(img_rgb, IMAGE_SIZE)
     superimposed = overlay_gradcam(img_resized, heatmap)
     
-    # 시각화
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     
     axes[0].imshow(img_resized)
@@ -208,7 +201,6 @@ def visualize_gradcam(image_path: str, save: bool = True):
     axes[2].set_title('Overlay', fontsize=14)
     axes[2].axis('off')
     
-    # 상태별 색상
     colors = {
         'EMPTY': 'green',
         'OCCUPIED': 'red',
@@ -251,7 +243,6 @@ def compare_gradcam(image_paths: list, save: bool = True):
 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        # 예측 (classifier 사용)
         classifier = get_classifier()
         status, confidence, _ = classifier.predict(img_rgb)
 
@@ -264,7 +255,6 @@ def compare_gradcam(image_paths: list, save: bool = True):
         except Exception:
             superimposed = img_resized
         
-        # 상태별 색상
         colors = {
             'EMPTY': 'green',
             'OCCUPIED': 'red', 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ArUco 마커 이미지들을 PDF로 합치는 스크립트
 """
@@ -11,16 +10,16 @@ import argparse
 
 def get_marker_id_from_filename(filename: str) -> int:
     """파일명에서 마커 ID 추출 (예: aruco_001.png -> 1)"""
-    name = Path(filename).stem  # aruco_001
-    id_str = name.split('_')[-1]  # 001
+    name = Path(filename).stem
+    id_str = name.split('_')[-1]
     return int(id_str)
 
 
 def merge_images_to_pdf(
     input_dir: str = "aruco_markers",
     output_file: str = "aruco_markers.pdf",
-    markers_per_page: int = 4,  # 2x2 배열
-    page_size: tuple = (2480, 3508),  # A4 at 300 DPI
+    markers_per_page: int = 4,
+    page_size: tuple = (2480, 3508),
     margin: int = 50
 ):
     """
@@ -35,7 +34,6 @@ def merge_images_to_pdf(
     """
     input_path = Path(input_dir)
     
-    # PNG 파일 목록 가져오기 (정렬)
     png_files = sorted(input_path.glob("aruco_*.png"))
     
     if not png_files:
@@ -44,22 +42,18 @@ def merge_images_to_pdf(
     
     print(f"총 {len(png_files)}개의 마커 이미지 발견")
     
-    # 그리드 계산
     cols = int(markers_per_page ** 0.5)
     rows = (markers_per_page + cols - 1) // cols
     
-    # 라벨 높이 확보
     label_height = 80
     
-    # 마커 크기 계산
     available_width = page_size[0] - (2 * margin)
     available_height = page_size[1] - (2 * margin)
     
     cell_width = available_width // cols
     cell_height = available_height // rows
-    marker_size = min(cell_width, cell_height - label_height) - 20  # 라벨 공간 확보
+    marker_size = min(cell_width, cell_height - label_height) - 20
     
-    # 폰트 설정 (기본 폰트 사용)
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 48)
     except:
@@ -74,35 +68,28 @@ def merge_images_to_pdf(
     print("-" * 50)
     
     for i, png_file in enumerate(png_files):
-        # 새 페이지 시작
         if i % markers_per_page == 0:
             if current_page is not None:
                 pages.append(current_page)
-            # 흰색 배경 페이지 생성
             current_page = Image.new('RGB', page_size, 'white')
             draw = ImageDraw.Draw(current_page)
             marker_idx = 0
             page_num = len(pages) + 1
             print(f"페이지 {page_num} 생성 중...")
         
-        # 마커 이미지 로드 및 리사이즈
         marker = Image.open(png_file).convert('RGB')
         marker = marker.resize((marker_size, marker_size), Image.Resampling.LANCZOS)
         
-        # 마커 ID 추출
         marker_id = get_marker_id_from_filename(str(png_file))
         
-        # 위치 계산
         row = marker_idx // cols
         col = marker_idx % cols
         
         x = margin + col * cell_width + (cell_width - marker_size) // 2
         y = margin + row * cell_height + (cell_height - marker_size - label_height) // 2
         
-        # 마커 배치
         current_page.paste(marker, (x, y))
         
-        # ID 라벨 추가 (마커 아래)
         label_text = f"ID: {marker_id}"
         bbox = draw.textbbox((0, 0), label_text, font=font)
         text_width = bbox[2] - bbox[0]
@@ -112,11 +99,9 @@ def merge_images_to_pdf(
         
         marker_idx += 1
     
-    # 마지막 페이지 추가
     if current_page is not None:
         pages.append(current_page)
     
-    # PDF 저장
     if pages:
         pages[0].save(
             output_file,
@@ -134,7 +119,7 @@ def merge_images_to_pdf(
 def merge_single_per_page(
     input_dir: str = "aruco_markers",
     output_file: str = "aruco_markers_single.pdf",
-    page_size: tuple = (2480, 3508)  # A4 at 300 DPI
+    page_size: tuple = (2480, 3508)
 ):
     """
     각 마커를 개별 페이지에 크게 배치합니다.
@@ -149,7 +134,7 @@ def merge_single_per_page(
     print(f"총 {len(png_files)}개의 마커를 개별 페이지로 생성")
     
     pages = []
-    marker_size = min(page_size) - 400  # 여백 고려
+    marker_size = min(page_size) - 400
     
     for i, png_file in enumerate(png_files):
         page = Image.new('RGB', page_size, 'white')
