@@ -1,0 +1,43 @@
+# FastAPI AI Server Dockerfile (GPU 지원)
+# EfficientNetV2-S TorchScript 기반 사물함 점유 분류 서버 - NVIDIA GPU 버전
+
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# 시스템 패키지 설치 (OpenCV 의존성)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# GPU 버전 requirements 복사 및 설치
+COPY requirements.txt .
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY config.py .
+COPY app/ ./app/
+COPY models/ ./models/
+
+# 환경 변수 설정
+ENV PYTHONUNBUFFERED=1
+ENV MODEL_PATH=models/efficientnetv2s_3class_traced.pt
+
+# 포트 노출
+EXPOSE 8000
+
+# 헬스체크
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# 서버 실행
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

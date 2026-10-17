@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Locker Checker - 사물함 상태 예측</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        h1 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.6);
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 0.9rem;
+        }
+
+        .upload-area {
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .upload-area:hover {
+            border-color: #4ade80;
+            background: rgba(74, 222, 128, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #4ade80;
+            background: rgba(74, 222, 128, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .upload-hint {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.85rem;
+        }
+
+        input[type="file"] {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-name {
+            color: #4ade80;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border: none;
+            border-radius: 12px;
+            color: #000;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(74, 222, 128, 0.3);
+        }
+
+        .submit-btn:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.4);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .result-card {
+            margin-top: 30px;
+            padding: 25px;
+            border-radius: 16px;
+            animation: fadeIn 0.5s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-success {
+            background: linear-gradient(135deg, rgba(74, 222, 128, 0.15) 0%, rgba(34, 197, 94, 0.1) 100%);
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .result-error {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.1) 100%);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .result-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .result-success .result-title {
+            color: #4ade80;
+        }
+
+        .result-error .result-title {
+            color: #ef4444;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+        }
+
+        .status-empty {
+            background: linear-gradient(135deg, #4ade80, #22c55e);
+            color: #000;
+        }
+
+        .status-occupied {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: #fff;
+        }
+
+        .status-unknown {
+            background: linear-gradient(135deg, #a855f7, #9333ea);
+            color: #fff;
+        }
+
+        .status-invalid {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: #fff;
+        }
+
+        .result-details {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .result-details p {
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .result-details span {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .probabilities {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .prob-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin: 8px 0;
+            overflow: hidden;
+        }
+
+        .prob-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 1s ease;
+        }
+
+        .prob-empty {
+            background: linear-gradient(90deg, #4ade80, #22c55e);
+        }
+
+        .prob-occupied {
+            background: linear-gradient(90deg, #f97316, #ea580c);
+        }
+
+        .prob-invalid {
+            background: linear-gradient(90deg, #6b7280, #4b5563);
+        }
+
+        .error-text {
+            color: rgba(255, 255, 255, 0.9);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Locker Checker</h1>
+        <p class="subtitle">사물함 이미지를 업로드하여 상태를 확인하세요</p>
+
+        <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <p class="upload-text">이미지를 드래그하거나 클릭하여 선택</p>
+                <p class="upload-hint">JPG, PNG 형식 지원 (최대 10MB)</p>
+                <input type="file" name="file" id="fileInput" accept="image/*">
+                <p class="file-name" id="fileName"></p>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn" disabled>예측하기</button>
+        </form>
+
+        <!-- 에러 메시지 -->
+        <div th:if="${error}" class="result-card result-error">
+            <p class="result-title">오류 발생</p>
+            <p class="error-text" th:text="${error}"></p>
+        </div>
+
+        <!-- 성공 결과 -->
+        <div th:if="${success}" class="result-card result-success">
+            <p class="result-title">예측 결과</p>
+            
+            <span class="status-badge"
+                th:classappend="${prediction.status == 'EMPTY'} ? 'status-empty' : (${prediction.status == 'OCCUPIED'} ? 'status-occupied' : (${prediction.status == 'INVALID'} ? 'status-invalid' : 'status-unknown'))"
+                th:text="${prediction.status == 'EMPTY'} ? '비어있음' : (${prediction.status == 'OCCUPIED'} ? '사용중' : (${prediction.status == 'INVALID'} ? '무효' : '불확실'))">
+            </span>
+
+            <div class="result-details">
+                <p><span>신뢰도:</span> <strong th:text="${#numbers.formatDecimal(prediction.confidence * 100, 1, 2) + '%'}"></strong></p>
+                <p><span>처리시간:</span> <strong th:text="${prediction.latencyMs + 'ms'}"></strong></p>
+                <p><span>저장 파일:</span> <strong th:text="${savedFilename}"></strong></p>
+            </div>
+
+            <div class="probabilities" th:if="${prediction.probabilities}">
+                <p style="margin-bottom: 10px;"><span>확률 분포</span></p>
+                <p><span>비어있음:</span> <strong th:text="${#numbers.formatDecimal(prediction.probabilities.empty * 100, 1, 2) + '%'}"></strong></p>
+                <div class="prob-bar">
+                    <div class="prob-fill prob-empty" th:style="'width: ' + ${prediction.probabilities.empty * 100} + '%'"></div>
+                </div>
+                <p><span>무효:</span> <strong th:text="${#numbers.formatDecimal(prediction.probabilities.invalid * 100, 1, 2) + '%'}"></strong></p>
+                <div class="prob-bar">
+                    <div class="prob-fill prob-invalid" th:style="'width: ' + ${prediction.probabilities.invalid * 100} + '%'"></div>
+                </div>
+                <p><span>사용중:</span> <strong th:text="${#numbers.formatDecimal(prediction.probabilities.occupied * 100, 1, 2) + '%'}"></strong></p>
+                <div class="prob-bar">
+                    <div class="prob-fill prob-occupied" th:style="'width: ' + ${prediction.probabilities.occupied * 100} + '%'"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const submitBtn = document.getElementById('submitBtn');
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            fileInput.files = e.dataTransfer.files;
+            updateFileName();
+        });
+
+        // File selection
+        fileInput.addEventListener('change', updateFileName);
+
+        function updateFileName() {
+            if (fileInput.files.length > 0) {
+                fileName.textContent = fileInput.files[0].name;
+                submitBtn.disabled = false;
+            } else {
+                fileName.textContent = '';
+                submitBtn.disabled = true;
+            }
+        }
+    </script>
+</body>
+</html>

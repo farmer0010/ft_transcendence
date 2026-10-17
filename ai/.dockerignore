@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+venv
+.venv
+*.egg
+
+# Data (학습 데이터 제외)
+data/
+*.csv
+
+# Docs & Scripts (서버 실행에 불필요)
+docs/
+scripts/
+*.md
+!README.md
+
+# ArUco 마커 관련
+aruco_markers/
+aruco_markers.pdf
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 기타
+.env
+webapp/
+.DS_Store

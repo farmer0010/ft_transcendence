@@ -1,0 +1,18 @@
+{
+  "version": "2.0.0",
+  "accuracy": 0.9992548435171386,
+  "threshold": 0.6,
+  "empty_weight": 2.0,
+  "model_type": "EfficientNetV2-S",
+  "input_size": [
+    384,
+    384
+  ],
+  "class_indices": {
+    "empty": 0,
+    "invalid": 1,
+    "occupied": 2
+  },
+  "num_classes": 3,
+  "created_at": "2026-01-22T19:14:57.789066"
+}
