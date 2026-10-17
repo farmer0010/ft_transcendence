@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 TorchScript 내보내기 스크립트 (trace)
 
@@ -39,7 +38,6 @@ def export_torchscript(weights_path: str, output_path: str, metadata_path: str):
     traced = torch.jit.trace(model, dummy)
     traced.save(output_path)
 
-    # 메타데이터는 학습 시 생성한 파일을 그대로 복사/사용하는 것을 권장
     if metadata_path:
         output_meta = Path(output_path).with_suffix("").with_name(Path(output_path).stem + "_metadata.json")
         with open(metadata_path, "r", encoding="utf-8") as f:
@@ -58,18 +56,15 @@ if __name__ == "__main__":
     weights_path = Path(args.weights)
     metadata_path = args.metadata
 
-    # 메타데이터 경로가 없으면 같은 이름의 json 확인
     if not metadata_path:
         candidate_meta = weights_path.with_name(weights_path.stem + "_metadata.json")
         if candidate_meta.exists():
             metadata_path = str(candidate_meta)
 
-    # 출력 경로 자동 생성
     output_path = args.output
     if not output_path:
         version = None
         
-        # 1. 메타데이터에서 버전 찾기
         if metadata_path and Path(metadata_path).exists():
             try:
                 import json
@@ -79,7 +74,6 @@ if __name__ == "__main__":
             except Exception:
                 pass
         
-        # 2. 파일 이름에서 버전 찾기 (_v2.0.0 형태)
         if not version:
             import re
             match = re.search(r"_v(\d+\.\d+\.\d+)", weights_path.name)
