@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 FastAPI ML Inference Server (v4.0) - EfficientNetV2 TorchScript 전용
 
@@ -22,7 +21,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import MODEL_PATH, DEFAULT_CONFIG
 from .classifier import get_classifier, EfficientNetClassifier
 
-# ===== 전역 상태 =====
 classifier: EfficientNetClassifier = None
 
 def init_model():
@@ -33,16 +31,12 @@ def init_model():
     print(f"Model loaded: EfficientNetV2-S TorchScript ({MODEL_PATH})")
 
 
-# ===== Lifespan 이벤트 =====
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     init_model()
     yield
-    # Shutdown (필요 시 정리 작업)
 
 
-# ===== FastAPI 앱 =====
 app = FastAPI(
     title="Locker Checker API",
     description="사물함 점유 상태 판별 API (v4.0) - EfficientNetV2 TorchScript 전용",
@@ -51,7 +45,6 @@ app = FastAPI(
 )
 
 
-# ===== 응답 스키마 =====
 class PredictResponse(BaseModel):
     status: str
     confidence: float
@@ -75,7 +68,6 @@ class HealthResponse(BaseModel):
     modelVersion: Optional[str] = None
 
 
-# ===== 엔드포인트 =====
 @app.get("/health", response_model=HealthResponse)
 def health():
     """서버 상태 확인"""
@@ -129,7 +121,6 @@ async def predict(
     request_id = str(uuid.uuid4())[:8]
     
     try:
-        # 파일 읽기 및 이미지 변환
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -137,15 +128,12 @@ async def predict(
         if img_np is None:
             raise HTTPException(400, "Invalid image file")
 
-        # BGR -> RGB 변환
         image = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
         
-        # 예측 (status는 이제 문자열: EMPTY, OCCUPIED, UNKNOWN, INVALID)
         status, confidence, proba = classifier.predict(image, threshold=threshold)
         
         latency_ms = int((time.time() - start) * 1000)
         
-        # 로깅
         print(f"[{request_id}] {status} (conf={confidence:.4f}) in {latency_ms}ms")
         
         return PredictResponse(

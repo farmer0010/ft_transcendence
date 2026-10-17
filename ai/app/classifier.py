@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 EfficientNetV2-S TorchScript 분류기 모듈
 

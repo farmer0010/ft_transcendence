@@ -31,14 +31,10 @@ public class PredictionService {
         this.uploadDir = uploadDir;
     }
 
-    /**
-     * 이미지를 예측 API로 전송하고 결과를 반환
-     */
     public Map<String, Object> predict(MultipartFile file) throws IOException {
         byte[] fileBytes = file.getBytes();
         String originalFilename = file.getOriginalFilename();
 
-        // Multipart 요청 구성
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("file", new ByteArrayResource(fileBytes) {
             @Override
@@ -47,7 +43,6 @@ public class PredictionService {
             }
         }).contentType(MediaType.parseMediaType(file.getContentType()));
 
-        // FastAPI 서버로 POST 요청
         @SuppressWarnings("unchecked")
         Map<String, Object> response = webClient.post()
                 .contentType(MediaType.MULTIPART_FORM_DATA)
@@ -59,17 +54,12 @@ public class PredictionService {
         return response;
     }
 
-    /**
-     * 업로드된 파일을 data/test 폴더에 저장
-     */
     public String saveFile(MultipartFile file) throws IOException {
-        // 디렉토리 생성 (없는 경우)
         Path uploadPath = Paths.get(resolveUploadDir(uploadDir));
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
         }
 
-        // 고유한 파일명 생성
         String originalFilename = file.getOriginalFilename();
         String extension = "";
         if (originalFilename != null && originalFilename.contains(".")) {
@@ -77,7 +67,6 @@ public class PredictionService {
         }
         String newFilename = "upload_" + UUID.randomUUID().toString().substring(0, 8) + extension;
 
-        // 파일 저장
         Path filePath = uploadPath.resolve(newFilename);
         Files.write(filePath, file.getBytes());
 

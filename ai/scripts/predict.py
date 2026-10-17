@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 EfficientNetV2-S TorchScript 모델 예측 스크립트
 
@@ -38,7 +37,6 @@ def predict_single(image_path: str, threshold: float = None, verbose: bool = Tru
         print(f"Status: {result['status']}")
         print(f"Confidence: {result['confidence']:.4f}")
         
-        # 확률 출력 (3-class면 invalid 포함)
         prob_str = ', '.join([f"{k}={v:.4f}" for k, v in result['probabilities'].items()])
         print(f"Probabilities: {prob_str}")
     
@@ -63,7 +61,6 @@ def predict_batch(image_paths: list, threshold: float = None) -> list:
             result['path'] = img_path
             results.append(result)
             
-            # 상태별 아이콘
             icons = {
                 'EMPTY': '🟢',
                 'OCCUPIED': '🔴',
@@ -75,7 +72,6 @@ def predict_batch(image_paths: list, threshold: float = None) -> list:
         except Exception as e:
             print(f"⚠️ {Path(img_path).name}: Error - {e}")
     
-    # 요약 (모든 상태 카운트)
     status_counts = {}
     for r in results:
         status = r['status']
@@ -96,7 +92,6 @@ def main():
     
     args = parser.parse_args()
     
-    # 경로 확장 (glob 패턴 지원)
     image_paths = []
     for pattern in args.images:
         if '*' in pattern:
