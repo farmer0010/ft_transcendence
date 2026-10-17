@@ -25,7 +25,7 @@ env:
 	@if [ ! -f .env ]; then cp .env.example .env && echo ".env 를 만들었습니다. 값을 확인하세요."; fi
 
 build: env
-	./gradlew -p backend clean build -x test
+	backend/gradlew -p backend clean build -x test
 
 up: build
 	$(COMPOSE) up -d --build $(SERVICES)
@@ -77,7 +77,7 @@ run: env
 	DB_HOST=127.0.0.1 DB_PORT=13306 REDIS_ALLOW_INSECURE=true \
 	SPRING_DATASOURCE_URL='$(JDBC_LOCAL)' \
 	SPRING_CLOUD_AZURE_STORAGE_BLOB_CONNECTION_STRING="$$AZURE_STORAGE_CONNECTION_STRING" \
-	./gradlew -p backend bootRun
+	backend/gradlew -p backend bootRun
 
 test:
-	./gradlew -p backend clean test
+	backend/gradlew -p backend clean test
