@@ -82,6 +82,11 @@ services:
       - AI_SERVER_URL=http://ai:8000
       - COOKIE_SECURE=${COOKIE_SECURE}
       - TZ=Asia/Seoul
+    networks:
+      default:
+        aliases:
+          - cabi_backend_blue
+          - cabi_backend_green
     depends_on:
       - mariadb
       - redis
