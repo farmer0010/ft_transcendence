@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Torch 전처리 유틸리티 모듈
 
@@ -70,7 +69,6 @@ def preprocess_image(image: np.ndarray) -> torch.Tensor:
     resized = cv2.resize(img, IMAGE_SIZE)
     normalized = _normalize(resized)
 
-    # HWC -> CHW
     chw = np.transpose(normalized, (2, 0, 1))
     tensor = torch.from_numpy(chw).unsqueeze(0)
     return tensor

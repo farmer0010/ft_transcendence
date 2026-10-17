@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 ArUco 마커 생성 스크립트
 1번부터 350번까지의 ArUco 마커를 생성합니다.
@@ -27,11 +26,9 @@ def generate_aruco_markers(
         output_dir: 출력 디렉토리 경로
         dictionary_type: ArUco 사전 타입 (기본값: DICT_4X4_1000)
     """
-    # 출력 디렉토리 생성
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
-    # ArUco 사전 로드
     aruco_dict = cv2.aruco.getPredefinedDictionary(dictionary_type)
     
     print(f"ArUco 마커 생성 시작: {start_id}번 ~ {end_id}번")
@@ -42,10 +39,8 @@ def generate_aruco_markers(
     generated_count = 0
     
     for marker_id in range(start_id, end_id + 1):
-        # 마커 이미지 생성
         marker_image = cv2.aruco.generateImageMarker(aruco_dict, marker_id, marker_size)
         
-        # 흰색 테두리 추가 (인쇄 시 인식률 향상)
         border_size = 20
         marker_with_border = cv2.copyMakeBorder(
             marker_image,
@@ -54,15 +49,12 @@ def generate_aruco_markers(
             value=255
         )
         
-        # 파일명 생성 (3자리 숫자로 패딩)
         filename = f"aruco_{marker_id:03d}.png"
         filepath = output_path / filename
         
-        # 이미지 저장
         cv2.imwrite(str(filepath), marker_with_border)
         generated_count += 1
         
-        # 진행 상황 출력 (50개마다)
         if marker_id % 50 == 0:
             print(f"진행 중... {marker_id}번 마커 생성 완료")
     
@@ -102,7 +94,6 @@ def generate_marker_sheet(
     sheet_width = cell_size * markers_per_row
     sheet_height = (cell_size + label_height) * rows
     
-    # 흰색 배경의 시트 생성
     sheet = np.ones((sheet_height, sheet_width), dtype=np.uint8) * 255
     
     for idx, marker_id in enumerate(range(start_id, end_id + 1)):
@@ -112,13 +103,10 @@ def generate_marker_sheet(
         x = col * cell_size + border
         y = row * (cell_size + label_height) + border
         
-        # 마커 생성
         marker_image = cv2.aruco.generateImageMarker(aruco_dict, marker_id, marker_size)
         
-        # 마커 배치
         sheet[y:y + marker_size, x:x + marker_size] = marker_image
         
-        # ID 라벨 추가
         label_y = y + marker_size + 18
         cv2.putText(
             sheet, 

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 INVALID 클래스용 이미지 다운로드 스크립트
 
@@ -18,31 +17,19 @@ import random
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# COCO 2017 Validation Set (작은 용량, 빠른 다운로드)
 COCO_VAL_INFO_URL = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
 COCO_IMAGE_BASE_URL = "http://images.cocodataset.org/val2017/"
 
-# 사물함과 관련 없는 카테고리 (COCO category IDs)
-# 사람, 동물, 음식, 차량, 가구가 아닌 일상 물체 등
 DIVERSE_CATEGORIES = [
-    # 동물
     "dog", "cat", "bird", "horse", "cow", "elephant", "bear", "zebra", "giraffe",
-    # 음식
     "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "pizza", "donut", "cake",
-    # 교통수단
     "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
-    # 스포츠
     "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "tennis racket",
-    # 자연/풍경 속 객체
     "umbrella", "handbag", "suitcase", "bottle", "wine glass", "cup", "fork", "knife",
-    # 전자기기
     "laptop", "mouse", "remote", "keyboard", "cell phone", "tv",
-    # 기타
     "book", "clock", "vase", "scissors", "teddy bear", "toothbrush"
 ]
 
-# 대안: 직접 URL 리스트 (빠른 다운로드용)
-# Lorem Picsum - 랜덤 이미지 서비스 (다양한 사진)
 PICSUM_BASE_URL = "https://picsum.photos"
 
 
@@ -73,9 +60,7 @@ def download_from_picsum(output_dir: str, count: int = 150, size: int = 640) -> 
     downloaded = 0
     failed = 0
     
-    # 병렬 다운로드
     def download_single(i):
-        # 다양성을 위해 랜덤 seed 사용
         seed = random.randint(1, 10000)
         url = f"{PICSUM_BASE_URL}/seed/{seed}/{size}/{size}"
         output_path = os.path.join(output_dir, f"invalid_{i:03d}.jpg")
@@ -113,25 +98,17 @@ def download_from_coco_samples(output_dir: str, count: int = 150) -> int:
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # COCO 2017 val set의 실제 이미지 ID들 (다양한 카테고리)
-    # 참고: https://cocodataset.org/
     sample_image_ids = [
-        # 동물
         "000000000139", "000000000285", "000000000632", "000000000724", "000000000776",
         "000000000785", "000000000802", "000000000872", "000000000885", "000000001000",
-        # 음식/주방
         "000000001268", "000000001296", "000000001353", "000000001425", "000000001490",
         "000000001503", "000000001532", "000000001584", "000000001675", "000000001761",
-        # 교통수단
         "000000001818", "000000001993", "000000002006", "000000002149", "000000002153",
         "000000002157", "000000002261", "000000002299", "000000002431", "000000002473",
-        # 스포츠/야외
         "000000002532", "000000002587", "000000002592", "000000002685", "000000002923",
         "000000003156", "000000003255", "000000003501", "000000003553", "000000003661",
-        # 일상/실내 (사물함 아닌 것들)
         "000000003845", "000000003934", "000000004134", "000000004495", "000000004765",
         "000000004795", "000000005001", "000000005037", "000000005193", "000000005477",
-        # 추가 다양한 이미지
         "000000005529", "000000005586", "000000005802", "000000005992", "000000006040",
         "000000006471", "000000006763", "000000006818", "000000006894", "000000007088",
         "000000007278", "000000007386", "000000007574", "000000007816", "000000007888",
@@ -140,7 +117,6 @@ def download_from_coco_samples(output_dir: str, count: int = 150) -> int:
         "000000009448", "000000009483", "000000009590", "000000009769", "000000009891",
         "000000010092", "000000010123", "000000010434", "000000010583", "000000010707",
         "000000010764", "000000010977", "000000011051", "000000011122", "000000011197",
-        # 더 많은 다양성
         "000000011511", "000000011615", "000000011760", "000000011813", "000000011881",
         "000000012062", "000000012120", "000000012576", "000000012639", "000000012667",
         "000000012748", "000000013004", "000000013177", "000000013291", "000000013348",
@@ -159,7 +135,6 @@ def download_from_coco_samples(output_dir: str, count: int = 150) -> int:
         "000000020059", "000000020107", "000000020247", "000000020333", "000000020571",
     ]
     
-    # 요청 개수만큼 선택
     selected_ids = sample_image_ids[:min(count, len(sample_image_ids))]
     
     print(f"\nDownloading {len(selected_ids)} images from COCO 2017 val set...")
@@ -226,7 +201,6 @@ def main():
         coco_count = args.count // 2 if args.source == 'both' else args.count
         total_downloaded += download_from_coco_samples(args.output, coco_count)
     
-    # 결과 확인
     output_path = Path(args.output)
     if output_path.exists():
         files = list(output_path.glob("*.jpg")) + list(output_path.glob("*.png"))

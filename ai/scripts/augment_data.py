@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 데이터 증강 스크립트 (v2.0)
 
@@ -22,7 +21,6 @@ import random
 from pathlib import Path
 from typing import List, Tuple
 
-# 설정
 INPUT_DIR = "data/train"
 OUTPUT_DIR = "data/train_augmented"
 IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png']
@@ -112,30 +110,25 @@ def add_shadow(image: np.ndarray, shadow_type: str = 'vertical',
     h, w = image.shape[:2]
     result = image.copy().astype(np.float32)
     
-    # 그림자 마스크 생성
     mask = np.ones((h, w), dtype=np.float32)
     
     if shadow_type == 'vertical':
-        # 세로 그림자 (좌/우 절반)
         start = random.randint(0, w // 2)
         end = random.randint(start + w // 4, w)
         mask[:, start:end] = 1 - opacity
         
     elif shadow_type == 'horizontal':
-        # 가로 그림자 (상/하 절반)
         start = random.randint(0, h // 2)
         end = random.randint(start + h // 4, h)
         mask[start:end, :] = 1 - opacity
         
     elif shadow_type == 'random':
-        # 랜덤 사각형 그림자
         x1 = random.randint(0, w // 2)
         y1 = random.randint(0, h // 2)
         x2 = random.randint(x1 + w // 4, w)
         y2 = random.randint(y1 + h // 4, h)
         mask[y1:y2, x1:x2] = 1 - opacity
     
-    # 마스크 적용
     for c in range(3):
         result[:, :, c] = result[:, :, c] * mask
     
@@ -156,7 +149,6 @@ def gamma_correction(image: np.ndarray, gamma: float) -> np.ndarray:
         image: 입력 이미지
         gamma: 감마 값 (0.5~2.0 권장)
     """
-    # 룩업 테이블 생성
     inv_gamma = 1.0 / gamma
     table = np.array([
         ((i / 255.0) ** inv_gamma) * 255 
@@ -182,7 +174,6 @@ def add_gradient_lighting(image: np.ndarray, direction: str = 'left',
     h, w = image.shape[:2]
     result = image.copy().astype(np.float32)
     
-    # 그라데이션 마스크 생성
     if direction == 'left':
         gradient = np.linspace(1 + intensity, 1 - intensity, w)
         gradient = np.tile(gradient, (h, 1))
@@ -198,7 +189,6 @@ def add_gradient_lighting(image: np.ndarray, direction: str = 'left',
     else:
         return image
     
-    # 그라데이션 적용
     for c in range(3):
         result[:, :, c] = result[:, :, c] * gradient
     
@@ -214,52 +204,40 @@ def augment_image(image: np.ndarray) -> List[Tuple[np.ndarray, str]]:
     """
     augmented = []
     
-    # 1. 회전 (-10°, +10°)
     augmented.append((rotate_image(image, -10), "rot_n10"))
     augmented.append((rotate_image(image, 10), "rot_p10"))
     
-    # 2. 좌우 반전
     augmented.append((flip_horizontal(image), "flip"))
     
-    # 3. 밝기 조정 (70%, 130%)
     augmented.append((adjust_brightness(image, 0.7), "dark"))
     augmented.append((adjust_brightness(image, 1.3), "bright"))
     
-    # 4. 대비 조정 (80%, 120%)
     augmented.append((adjust_contrast(image, 0.8), "lowcon"))
     augmented.append((adjust_contrast(image, 1.2), "highcon"))
     
-    # 5. 노이즈 추가
     augmented.append((add_gaussian_noise(image, 15), "noise"))
     
-    # 6. [NEW] 그림자 시뮬레이션
     augmented.append((add_shadow(image, 'vertical', 0.4), "shadow_v"))
     augmented.append((add_shadow(image, 'horizontal', 0.4), "shadow_h"))
     augmented.append((add_shadow(image, 'random', 0.5), "shadow_r"))
     
-    # 7. [NEW] 감마 보정 (비선형 밝기)
     augmented.append((gamma_correction(image, 0.6), "gamma_bright"))
     augmented.append((gamma_correction(image, 1.5), "gamma_dark"))
     augmented.append((gamma_correction(image, 2.0), "gamma_vdark"))
     
-    # 8. [NEW] 그라데이션 조명
     augmented.append((add_gradient_lighting(image, 'left', 0.3), "grad_left"))
     augmented.append((add_gradient_lighting(image, 'right', 0.3), "grad_right"))
     augmented.append((add_gradient_lighting(image, 'top', 0.3), "grad_top"))
     
-    # 9. 복합 증강 (회전 + 밝기)
     rotated = rotate_image(image, 5)
     augmented.append((adjust_brightness(rotated, 0.85), "combo1"))
     
-    # 10. 복합 증강 (반전 + 대비)
     flipped = flip_horizontal(image)
     augmented.append((adjust_contrast(flipped, 1.1), "combo2"))
     
-    # 11. [NEW] 복합 증강 (그림자 + 감마)
     shadow_img = add_shadow(image, 'vertical', 0.3)
     augmented.append((gamma_correction(shadow_img, 1.3), "combo3"))
     
-    # 12. [NEW] 복합 증강 (회전 + 그라데이션)
     rotated2 = rotate_image(image, -5)
     augmented.append((add_gradient_lighting(rotated2, 'left', 0.25), "combo4"))
     
@@ -284,11 +262,9 @@ def process_directory(input_dir: Path, output_dir: Path):
             print(f"Cannot read: {img_path}")
             continue
         
-        # 원본 복사
         original_output = output_dir / img_path.name
         cv2.imwrite(str(original_output), image)
         
-        # 증강 이미지 생성
         augmented_images = augment_image(image)
         
         for aug_img, suffix in augmented_images:
@@ -297,7 +273,6 @@ def process_directory(input_dir: Path, output_dir: Path):
             aug_path = output_dir / f"{stem}_{suffix}{ext}"
             cv2.imwrite(str(aug_path), aug_img)
     
-    # 결과 이미지 수 확인
     result_count = sum(1 for _ in output_dir.glob("*.*") 
                        if _.suffix.lower() in IMAGE_EXTENSIONS)
     print(f"Generated {result_count} images in {output_dir}")
@@ -326,7 +301,6 @@ def main():
     print(f"Output directory: {OUTPUT_DIR}")
     print("=" * 60)
     
-    # 요약 통계
     print("\nSummary:")
     for cls in classes:
         original = Path(INPUT_DIR) / cls

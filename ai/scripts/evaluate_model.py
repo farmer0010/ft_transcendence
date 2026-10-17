@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 EfficientNetV2 모델 성능 측정 스크립트
 
@@ -26,7 +25,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from app.classifier import get_classifier
 from config import MODEL_PATH, IMAGE_SIZE
 
-# 설정
 TRAIN_DATA_DIR = "data/train"
 TEST_DATA_DIR = "data/test"
 DEFAULT_THRESHOLD = 0.6
@@ -158,7 +156,7 @@ Actual OCCUPIED {train_results['confusion_matrix'][2][0]:5d}    {train_results['
 | 파일명 | 실제 | 예측 |
 |--------|:----:|:----:|
 """
-        for item in misclassified_train[:10]:  # 최대 10개만 표시
+        for item in misclassified_train[:10]:
             report += f"| {item['filename']} | {item['true']} | {item['predicted']} |\n"
         
         if len(misclassified_train) > 10:
@@ -229,12 +227,10 @@ def main():
     print(f"Model: {MODEL_PATH}")
     print(f"Threshold: {args.threshold}")
     
-    # 분류기 로드
     classifier = get_classifier()
     classifier.load_model()
     metadata = classifier.get_metadata()
     
-    # Train 데이터 로드 및 평가
     print(f"\n[1/2] Evaluating on Train data: {TRAIN_DATA_DIR}")
     train_images, train_labels, train_filenames = load_images_from_directory(TRAIN_DATA_DIR)
     
@@ -258,7 +254,6 @@ def main():
         print(f"  Occupied Recall: {train_results['report']['OCCUPIED']['recall']:.1%}")
         print(f"  Misclassified: {len(misclassified_train)}")
     
-    # Test 데이터 로드 및 평가
     print(f"\n[2/2] Evaluating on Test data: {TEST_DATA_DIR}")
     test_images, test_labels, test_filenames = load_images_from_directory(TEST_DATA_DIR)
     
@@ -282,7 +277,6 @@ def main():
         print(f"  Occupied Recall: {test_results['report']['OCCUPIED']['recall']:.1%}")
         print(f"  Misclassified: {len(misclassified_test)}")
     
-    # 리포트 생성
     print(f"\nGenerating report: {args.output}")
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     
