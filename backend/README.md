@@ -245,56 +245,35 @@ JDK 17은 Ubuntu에서 `sudo apt install openjdk-17-jdk`로 설치할 수 있습
 
 ## 3. 설치 방법 및 실행 방법
 
-### make로 실행
-
-`make`가 있으면 아래 세 줄로 끝납니다. `make up`은 `.env`가 없으면 `.env.example`을 복사하고, jar를 빌드한 뒤 `ai`를 뺀 컨테이너를 띄우고 백엔드가 뜰 때까지 기다립니다.
+이 저장소는 BE와 AI가 하나로 합쳐진 모노레포입니다. 전체 스택 실행 방법은 저장소 루트의 [README.md](../README.md)를 따릅니다. 루트 Makefile, 루트 `docker-compose.yml`, 루트 `.env.example`을 씁니다(이 폴더 안에는 더 이상 별도의 Makefile, compose 파일, `.env.example`이 없습니다).
 
 ```bash
+# 저장소 루트에서
 make up
 make seed
 make check
 ```
 
-`make help`로 대상 목록을 볼 수 있습니다. 종료는 `make down`, 데이터까지 지우려면 `make reset`, 컨테이너 없이 호스트에서 실행하려면 `make run`, 테스트는 `make test`입니다. `make`가 없는 환경에서는 아래 명령을 직접 실행합니다.
+`make help`로 대상 목록을 볼 수 있습니다. 종료는 `make down`, 데이터까지 지우려면 `make reset`, 테스트는 `make test`입니다. AI 서버는 이제 비공개 이미지가 아니라 `ai/` 소스에서 직접 빌드하므로 기본적으로 함께 뜹니다.
 
-### Docker Compose로 실행
-
-```bash
-git clone https://github.com/farmer0010/ft_cabinet_BE-v2.git
-cd ft_cabinet_BE-v2
-cp .env.example .env
-./gradlew clean build -x test
-docker compose up -d --build --no-deps mariadb redis backend nginx prometheus grafana
-```
-
-`.env.example`의 자리표시자 값 그대로도 서버는 뜹니다. 다만 OAuth 로그인과 반납 사진 업로드는 실제 키가 있어야 동작합니다. 백엔드는 처음 뜰 때 Flyway로 데이터베이스 스키마를 만듭니다.
-
-`ai` 서비스는 일부러 뺐습니다. AI 서버 이미지가 비공개라 받을 수 없으면 `docker compose up`이 이미지 pull에서 멈춥니다. AI 서버 없이도 사물함 조회와 대여는 되고, 사진 검사를 하는 반납, 이사, 사진 확인 API만 실패합니다. 이미지에 접근할 수 있다면 `docker compose up -d --build`로 전부 실행합니다.
-
-백엔드가 뜨는 데 30초쯤 걸립니다. 아래 명령으로 기동을 확인합니다.
+사물함 목록이 비어 있으므로 가짜 데이터로 된 시드를 넣습니다(`make seed`가 내부적으로 실행하는 내용과 같습니다).
 
 ```bash
-docker compose logs backend | grep "Started CabinetApplication"
-```
-
-사물함 목록이 비어 있으므로 가짜 데이터로 된 시드를 넣습니다. 사용자 이름과 비밀번호는 `.env`의 `DB_USER`, `DB_PASSWORD`와 같아야 합니다.
-
-```bash
-docker exec -i cabi_db mariadb -uyour_db_user -pyour_db_password cabi < scripts/db/seed/demo-seed.sql
+docker exec -i cabi_db mariadb -uyour_db_user -pyour_db_password cabi < backend/scripts/db/seed/demo-seed.sql
 ```
 
 시드에는 2~4층 사물함 90개와 `demo-admin`(관리자), `demo-user-01`, `demo-user-02`, `demo-piscine-01` 사용자가 들어 있습니다. 이 사용자들로 로그인할 수는 없습니다.
 
-종료와 초기화는 다음과 같습니다.
+종료와 초기화는 다음과 같습니다(저장소 루트에서).
 
 ```bash
-docker compose down
-docker compose down -v && rm -rf db_data redis_data
+make down
+make reset   # 컨테이너와 db_data, redis_data 까지 모두 삭제
 ```
 
 ### Gradle로 직접 실행
 
-데이터베이스와 Redis만 compose로 띄우고 애플리케이션은 호스트에서 실행합니다.
+데이터베이스와 Redis만 compose로 띄우고 백엔드만 호스트에서 실행하려면 저장소 루트의 `make run`을 씁니다. 직접 하려면 저장소 루트에서:
 
 ```bash
 cp .env.example .env
@@ -303,7 +282,7 @@ set -a; source .env; set +a
 DB_HOST=127.0.0.1 DB_PORT=13306 REDIS_ALLOW_INSECURE=true \
 SPRING_DATASOURCE_URL='jdbc:mariadb://127.0.0.1:13306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false' \
 SPRING_CLOUD_AZURE_STORAGE_BLOB_CONNECTION_STRING="$AZURE_STORAGE_CONNECTION_STRING" \
-./gradlew bootRun
+backend/gradlew -p backend bootRun
 ```
 
 로컬 MariaDB는 TLS가 꺼져 있어서 JDBC URL을 `useSSL=false`로 직접 지정합니다. 이 경우 애플리케이션 주소는 `http://localhost:8080`입니다.
