@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Data files (large datasets)
+data/train/
+data/train_augmented/
+dataset.zip
+
+# 테스팅 및 시각화 데이터는 현재는 git에 추가 (추후 .gitignore 추가 예정)
+# data/test/
+data/visualizations/
+
+# Model files are managed by Git LFS
+
+# Local download output
+download/
+**/download/
+
+# Logs
+*.log
+logs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test outputs
+*.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ArUco markers
+aruco_markers/
+aruco_marker_sheet.png

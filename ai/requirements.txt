@@ -1,0 +1,21 @@
+# FastAPI Server
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# Deep Learning (CPU only - default)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2
+torchvision==0.17.2
+
+# GPU Training (RTX 50xx / sm_120) - use cu128 nightly
+# pip install --pre --index-url https://download.pytorch.org/whl/nightly/cu128 torch torchvision
+
+# Image Processing
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+numpy==1.26.4
+
+# Visualization & Evaluation
+matplotlib==3.9.3
+scikit-learn==1.5.2
