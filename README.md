@@ -50,6 +50,27 @@ cp .env.example .env
 
 `.env.example` 의 값은 모두 자리표시자입니다. `.env` 는 git에 올리지 않습니다. 필수 항목은 DB 계정/비밀번호, JWT 시크릿, 42/카카오/구글 OAuth 클라이언트 정보, 슬랙 봇 토큰, Azure Blob Storage 연결 문자열, AI 모델 경로(`AI_MODEL_PATH`)입니다. `#` 으로 시작하는 줄은 선택 항목이며 적힌 값이 기본값입니다. 변수별 설명은 `.env.example` 안의 주석과 [backend/README.md](backend/README.md) 를 참고합니다. 프론트엔드 환경 변수는 [frontend/README.md](frontend/README.md) 를 참고합니다.
 
+자리표시자를 그대로 둔 채 로컬에서 실행하면 다음 값이 적용됩니다.
+
+- `REDIS_PORT=6379`
+- `FRONTEND_URL=http://localhost`
+- `COOKIE_SECURE=false`
+- `AI_MODEL_PATH=models/efficientnetv2s_3class_traced_v2.0.0.pt`
+
+`CORS_ALLOWED_ORIGINS` 는 비워 둬도 `FRONTEND_URL` 의 오리진이 자동으로 허용되므로 로컬 실행에서는 따로 채우지 않아도 됩니다.
+
+외부 서비스 값(42/카카오/구글 클라이언트, 슬랙 봇 토큰, Azure 연결 문자열)을 자리표시자로 둬도 `make up` 은 끝까지 됩니다. 다만 아래 기능은 동작하지 않습니다.
+
+| 기능 | 자리표시자로 동작 여부 | 이유 |
+|---|---|---|
+| 42/카카오/구글 로그인 | 아니오 | 로그인 시도 시 실제 제공자로 리다이렉트되지만 client-id/secret 이 가짜라 제공자 쪽에서 인증에 실패합니다. |
+| 슬랙 알림 | 아니오 | 토큰은 기동 시점에 검증하지 않지만, 실제 슬랙 API 호출 시점에 인증 오류로 실패합니다. |
+| 반납 사진 업로드 | 아니오 | Azure Blob 클라이언트 생성 자체는 기동에 영향을 주지 않지만, 실제 업로드 시점에 가짜 자격 증명으로 실패합니다. |
+
+이 세 기능을 뺀 사물함 조회·대여·연장 등 기본 기능은 자리표시자로도 동작합니다.
+
+루트 `docker-compose.yml` 이 `backend` 서비스에 명시적으로 넘기지 않는 변수(`CHATBOT_*`, `SLACK_NOTICE_*`, `SLACK_REPORT_*`, `GEMINI_API_KEY`, `APP_AUTH_COOKIE_SECURE` 등 선택 기능 변수)는 `.env` 에 값을 채워도 `make up` 으로 띄운 컨테이너에는 적용되지 않습니다.
+
 ## 5. 접속·확인 방법
 
 `make up` 으로 전체 스택을 띄운 뒤:
@@ -58,10 +79,13 @@ cp .env.example .env
 - Swagger: `http://localhost/swagger-ui/index.html`
 - Grafana: `http://localhost:3000` (admin / admin)
 - AI 서버 상태: `make check-ai` (컨테이너 내부 네트워크 전용, 호스트에는 `127.0.0.1:8000` 으로만 열림)
+- 사물함 현황(로그인 불필요): `curl http://localhost/v4/cabinets/status-summary/all` (`make check` 와 같은 호출입니다)
 - 프론트엔드: (제출 시 기재)
 - 배포 주소: (제출 시 기재)
 
 로그인은 42/카카오/구글 OAuth 뿐이며, 별도의 테스트 계정은 제공하지 않습니다. 시드로 넣는 `demo-*` 사용자는 DB 데이터일 뿐 로그인 계정이 아닙니다.
+
+로컬에서 로그인하려면 각 OAuth 앱에 redirect URI 를 `{FRONTEND_URL}/login/oauth2/code/{42|kakao|google}` 형식으로 등록해야 합니다(기본값 기준 `http://localhost/login/oauth2/code/42` 등). `FRONTEND_URL` 과 등록한 주소가 한 글자라도 다르면 로그인이 실패합니다.
 
 ---
 
