@@ -15,7 +15,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -23,31 +22,11 @@ import org.springframework.web.client.RestTemplate;
 @Log4j2
 public class SlackBotService {
 
-    private final String botToken;
-    private final String apiBaseUrl;
-    private final RestTemplate restTemplate;
-    private final Map<String, String> slackUserIdMap = new ConcurrentHashMap<>();
+    @Value("${slack.token}")
+    private String botToken;
 
-    public SlackBotService(
-            @Value("${slack.token}") String botToken,
-            @Value("${slack.api-base-url:https://slack.com/api}") String apiBaseUrl,
-            @Value("${slack.http.connect-timeout-ms:3000}") int connectTimeoutMs,
-            @Value("${slack.http.read-timeout-ms:5000}") int readTimeoutMs) {
-        if (connectTimeoutMs <= 0 || readTimeoutMs <= 0) {
-            throw new IllegalArgumentException(
-                    "Slack HTTP 타임아웃(slack.http.connect-timeout-ms, slack.http.read-timeout-ms)은 1 이상이어야 합니다."
-                            + " 0 이하는 무제한이라 허용하지 않습니다.");
-        }
-        this.botToken = botToken;
-        this.apiBaseUrl =
-                apiBaseUrl.endsWith("/")
-                        ? apiBaseUrl.substring(0, apiBaseUrl.length() - 1)
-                        : apiBaseUrl;
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(connectTimeoutMs);
-        requestFactory.setReadTimeout(readTimeoutMs);
-        this.restTemplate = new RestTemplate(requestFactory);
-    }
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final Map<String, String> slackUserIdMap = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -101,7 +80,7 @@ public class SlackBotService {
             return slackUserIdMap.get(intraId);
         }
 
-        String url = apiBaseUrl + "/users.list";
+        String url = "https://slack.com/api/users.list";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(botToken);
@@ -131,7 +110,7 @@ public class SlackBotService {
     }
 
     private void sendMessage(String channelId, String text) {
-        String url = apiBaseUrl + "/chat.postMessage";
+        String url = "https://slack.com/api/chat.postMessage";
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

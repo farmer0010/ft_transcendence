@@ -1,3 +1,5 @@
+> **참고**: 이 문서는 v2 레포(`ft_cabinet_be-v2`)에서 그대로 가져온 절차 문서다. 이 저장소(제출용 backend)는 Flyway 를 사용하지 않고(의존성·마이그레이션 파일 없음, `ddl-auto: validate`), V2~V6 가 다루는 `admin_action_log`/`faq`/`kakao_notify_consent`/`user.ft_grade` 도 포함돼 있지 않다. 참고용으로만 보관한다. 문서에 나오는 테스트 서버 이름(`subak-server-test`)은 운영 측 내부 리소스이며 이 제출물과 무관하다.
+
 # Flyway 베이스라인 (V1) 와 운영 적용 절차
 
 > 이 문서는 **절차 문서**다. 코드 작업 중에는 운영 DB 에 접속하지 않았다. 아래 "운영 적용"은 운영 DB 접근 권한자가 직접, 한 번만 수행한다.

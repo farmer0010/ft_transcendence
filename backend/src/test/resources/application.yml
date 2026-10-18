@@ -5,15 +5,13 @@ spring:
     username: sa
     password:
 
-  flyway:
-    enabled: false
-
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
     defer-datasource-initialization: true
   
+  # Disable other external dependencies for tests
   data:
     redis:
       host: localhost
@@ -68,8 +66,6 @@ slack:
   token: test-slack-token
 
 app:
-  redis:
-    allow-insecure: true
   frontend:
     url: http://localhost:3000
   ft-api:

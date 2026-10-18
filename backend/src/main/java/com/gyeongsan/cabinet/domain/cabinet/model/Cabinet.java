@@ -7,11 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 @Entity
-@Table(
-        name = "CABINET",
-        indexes = {
-            @Index(name = "idx_cabinet_visible_num", columnList = "VISIBLE_NUM", unique = true)
-        })
+@Table(name = "CABINET")
 @Getter
 @ToString
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

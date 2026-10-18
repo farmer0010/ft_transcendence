@@ -12,8 +12,8 @@ import com.gyeongsan.cabinet.domain.cabinet.port.out.CabinetRepositoryPort;
 import com.gyeongsan.cabinet.domain.lent.model.LentHistory;
 import com.gyeongsan.cabinet.domain.lent.port.out.LentRepositoryPort;
 import com.gyeongsan.cabinet.domain.lent.port.out.ReservationPort;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -22,14 +22,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Log4j2
 public class CabinetDomainService implements CabinetQueryUseCase {
 
     private final CabinetRepositoryPort cabinetRepository;
@@ -68,7 +68,8 @@ public class CabinetDomainService implements CabinetQueryUseCase {
                                 expiredAt = activeLent.getExpiredAt();
                                 daysRemaining =
                                         expiredAt != null
-                                                ? activeLent.calculateRemainingDays(LocalDate.now())
+                                                ? ChronoUnit.DAYS.between(
+                                                        LocalDateTime.now(), expiredAt)
                                                 : 0;
                             }
 
@@ -174,10 +175,6 @@ public class CabinetDomainService implements CabinetQueryUseCase {
         String curName = (activeLent != null) ? activeLent.getUser().getName() : null;
         LocalDateTime curStart = (activeLent != null) ? activeLent.getStartedAt() : null;
         LocalDateTime curEnd = (activeLent != null) ? activeLent.getExpiredAt() : null;
-        Long daysRemaining =
-                (activeLent != null && curEnd != null)
-                        ? (long) activeLent.calculateRemainingDays(LocalDate.now())
-                        : null;
 
         String prevName = (previousLent != null) ? previousLent.getUser().getName() : "-";
         LocalDateTime prevEnd = (previousLent != null) ? previousLent.getEndedAt() : null;
@@ -215,7 +212,6 @@ public class CabinetDomainService implements CabinetQueryUseCase {
                 .lentUserName(curName)
                 .lentStartedAt(curStart)
                 .lentExpiredAt(curEnd)
-                .daysRemaining(daysRemaining)
                 .previousUserName(prevName)
                 .previousEndedAt(prevEnd)
                 .isReserved(isReserved)

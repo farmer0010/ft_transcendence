@@ -1,9 +1,7 @@
 package com.gyeongsan.cabinet.global.aspect;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.temporal.Temporal;
 import java.util.Arrays;
-import java.util.stream.Collectors;
 import lombok.extern.log4j.Log4j2;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -32,11 +30,12 @@ public class LoggingAspect {
         String method = request.getMethod();
         String requestURI = request.getRequestURI();
 
-        log.info(
-                "👉 [REQUEST] {} {} | Params: {}",
-                method,
-                requestURI,
-                summarize(joinPoint.getArgs()));
+        String params = Arrays.toString(joinPoint.getArgs());
+        if (params.length() > 150) {
+            params = params.substring(0, 150) + "... (생략됨)";
+        }
+
+        log.info("👉 [REQUEST] {} {} | Params: {}", method, requestURI, params);
 
         Object result = joinPoint.proceed();
 
@@ -50,27 +49,5 @@ public class LoggingAspect {
         }
 
         return result;
-    }
-
-    static String summarize(Object[] args) {
-        if (args == null || args.length == 0) {
-            return "[]";
-        }
-        return Arrays.stream(args)
-                .map(LoggingAspect::describe)
-                .collect(Collectors.joining(", ", "[", "]"));
-    }
-
-    static String describe(Object arg) {
-        if (arg == null) {
-            return "null";
-        }
-        if (arg instanceof Number
-                || arg instanceof Boolean
-                || arg instanceof Enum<?>
-                || arg instanceof Temporal) {
-            return String.valueOf(arg);
-        }
-        return arg.getClass().getSimpleName();
     }
 }

@@ -9,7 +9,6 @@ import static org.mockito.Mockito.*;
 
 import com.gyeongsan.cabinet.domain.auth.OauthLink;
 import com.gyeongsan.cabinet.domain.auth.dto.OAuthUserInfo;
-import com.gyeongsan.cabinet.domain.auth.port.out.LinkRedirectUriPort;
 import com.gyeongsan.cabinet.domain.auth.port.out.OAuthApiClientPort;
 import com.gyeongsan.cabinet.domain.auth.port.out.OauthLinkRepositoryPort;
 import com.gyeongsan.cabinet.domain.user.model.User;
@@ -36,8 +35,6 @@ class OauthLinkServiceTest {
 
     @Mock private OAuthApiClientPort googleApiClient;
 
-    @Mock private LinkRedirectUriPort linkRedirectUriPort;
-
     private OauthLinkService oauthLinkService;
 
     @BeforeEach
@@ -49,13 +46,13 @@ class OauthLinkServiceTest {
                 new OauthLinkService(
                         oauthLinkRepository,
                         userRepository,
-                        List.of(kakaoApiClient, googleApiClient),
-                        linkRedirectUriPort);
+                        List.of(kakaoApiClient, googleApiClient));
     }
 
     @Test
     @DisplayName("성공적으로 카카오 계정을 연동한다")
     void linkKakaoAccount_success() {
+        // given
         Long userId = 1L;
         String authCode = "auth-code";
         OAuthUserInfo oauthInfo = new OAuthUserInfo("12345678", "kakao@example.com");
@@ -67,14 +64,17 @@ class OauthLinkServiceTest {
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(oauthLinkRepository.existsByUserAndProvider(user, "kakao")).willReturn(false);
 
+        // when
         oauthLinkService.linkAccount(userId, "kakao", authCode);
 
+        // then
         then(oauthLinkRepository).should(times(1)).save(any(OauthLink.class));
     }
 
     @Test
     @DisplayName("성공적으로 구글 계정을 연동한다")
     void linkGoogleAccount_success() {
+        // given
         Long userId = 1L;
         String authCode = "auth-code";
         OAuthUserInfo oauthInfo = new OAuthUserInfo("google-sub-id", "google@example.com");
@@ -86,8 +86,10 @@ class OauthLinkServiceTest {
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(oauthLinkRepository.existsByUserAndProvider(user, "google")).willReturn(false);
 
+        // when
         oauthLinkService.linkAccount(userId, "google", authCode);
 
+        // then
         then(oauthLinkRepository).should(times(1)).save(any(OauthLink.class));
     }
 
@@ -113,6 +115,7 @@ class OauthLinkServiceTest {
     @Test
     @DisplayName("이미 다른 42 계정에 연동된 소셜 ID인 경우 예외를 던진다")
     void linkAccount_alreadyLinkedToOther() {
+        // given
         Long userId = 1L;
         String authCode = "auth-code";
         OAuthUserInfo oauthInfo = new OAuthUserInfo("12345678", "kakao@example.com");
@@ -121,6 +124,7 @@ class OauthLinkServiceTest {
         given(oauthLinkRepository.existsByProviderAndProviderId("kakao", "12345678"))
                 .willReturn(true);
 
+        // when & then
         ServiceException exception =
                 assertThrows(
                         ServiceException.class,
@@ -133,6 +137,7 @@ class OauthLinkServiceTest {
     @Test
     @DisplayName("현재 유저가 이미 해당 소셜 연동을 완료한 경우 예외를 던진다")
     void linkAccount_alreadyLinkedByUser() {
+        // given
         Long userId = 1L;
         String authCode = "auth-code";
         OAuthUserInfo oauthInfo = new OAuthUserInfo("12345678", "kakao@example.com");
@@ -144,6 +149,7 @@ class OauthLinkServiceTest {
         given(userRepository.findById(userId)).willReturn(Optional.of(user));
         given(oauthLinkRepository.existsByUserAndProvider(user, "kakao")).willReturn(true);
 
+        // when & then
         ServiceException exception =
                 assertThrows(
                         ServiceException.class,
@@ -151,59 +157,5 @@ class OauthLinkServiceTest {
 
         assertEquals(ErrorCode.OAUTH_ALREADY_LINKED_BY_USER, exception.getErrorCode());
         then(oauthLinkRepository).should(never()).save(any(OauthLink.class));
-    }
-
-    @Test
-    @DisplayName("카카오 토큰 교환에는 포트가 돌려준 연동용 redirect URI 가 그대로 전달된다")
-    void linkKakaoAccount_passesRedirectUriFromPort() {
-        Long userId = 1L;
-        String authCode = "auth-code";
-        String redirectUri = "https://subak.site/auth/link/callback/kakao";
-        OAuthUserInfo oauthInfo = new OAuthUserInfo("12345678", "kakao@example.com");
-        User user = mock(User.class);
-
-        given(linkRedirectUriPort.getLinkRedirectUri("kakao")).willReturn(redirectUri);
-        given(kakaoApiClient.getOAuthUserInfo(authCode, redirectUri)).willReturn(oauthInfo);
-        given(oauthLinkRepository.existsByProviderAndProviderId("kakao", "12345678"))
-                .willReturn(false);
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(oauthLinkRepository.existsByUserAndProvider(user, "kakao")).willReturn(false);
-
-        oauthLinkService.linkAccount(userId, "kakao", authCode);
-
-        then(kakaoApiClient).should().getOAuthUserInfo(authCode, redirectUri);
-        then(oauthLinkRepository).should(times(1)).save(any(OauthLink.class));
-    }
-
-    @Test
-    @DisplayName("구글 토큰 교환에는 포트가 돌려준 연동용 redirect URI 가 그대로 전달된다")
-    void linkGoogleAccount_passesRedirectUriFromPort() {
-        Long userId = 1L;
-        String authCode = "auth-code";
-        String redirectUri = "https://subak.site/auth/link/callback/google";
-        OAuthUserInfo oauthInfo = new OAuthUserInfo("google-sub-id", "google@example.com");
-        User user = mock(User.class);
-
-        given(linkRedirectUriPort.getLinkRedirectUri("google")).willReturn(redirectUri);
-        given(googleApiClient.getOAuthUserInfo(authCode, redirectUri)).willReturn(oauthInfo);
-        given(oauthLinkRepository.existsByProviderAndProviderId("google", "google-sub-id"))
-                .willReturn(false);
-        given(userRepository.findById(userId)).willReturn(Optional.of(user));
-        given(oauthLinkRepository.existsByUserAndProvider(user, "google")).willReturn(false);
-
-        oauthLinkService.linkAccount(userId, "google", authCode);
-
-        then(googleApiClient).should().getOAuthUserInfo(authCode, redirectUri);
-        then(oauthLinkRepository).should(times(1)).save(any(OauthLink.class));
-    }
-
-    @Test
-    @DisplayName("지원하지 않는 provider 는 redirect URI 를 만들기 전에 거부된다")
-    void linkAccount_unsupportedProvider_rejectedBeforeRedirectUri() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> oauthLinkService.linkAccount(1L, "naver", "auth-code"));
-
-        then(linkRedirectUriPort).should(never()).getLinkRedirectUri(any());
     }
 }

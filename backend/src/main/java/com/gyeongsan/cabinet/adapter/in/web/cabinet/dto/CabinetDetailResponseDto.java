@@ -19,13 +19,10 @@ public class CabinetDetailResponseDto {
     private LocalDateTime lentStartedAt;
     private LocalDateTime lentExpiredAt;
 
-    private Long daysRemaining;
-
     private String previousUserName;
     private LocalDateTime previousEndedAt;
 
     private Boolean isReserved;
     private Boolean isReservedByMe;
-
     private Long reservationRemainingSeconds;
 }

@@ -3,9 +3,7 @@ package com.gyeongsan.cabinet.domain.lent.model;
 import com.gyeongsan.cabinet.domain.cabinet.model.Cabinet;
 import com.gyeongsan.cabinet.domain.user.model.User;
 import jakarta.persistence.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -77,11 +75,6 @@ public class LentHistory {
         this.endedAt = now;
     }
 
-    public void reopen(String returnMemo) {
-        this.endedAt = null;
-        this.returnMemo = returnMemo;
-    }
-
     public void addReturnMemo(String returnMemo) {
         this.returnMemo = returnMemo;
     }
@@ -112,9 +105,5 @@ public class LentHistory {
     public int calculateOverdueDays(LocalDateTime now) {
         if (!isOverdue(now)) return 0;
         return (int) java.time.temporal.ChronoUnit.DAYS.between(this.expiredAt, now);
-    }
-
-    public int calculateRemainingDays(LocalDate today) {
-        return (int) ChronoUnit.DAYS.between(today, this.expiredAt.toLocalDate());
     }
 }

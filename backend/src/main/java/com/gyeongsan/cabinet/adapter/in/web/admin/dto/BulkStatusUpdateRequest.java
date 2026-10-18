@@ -5,9 +5,4 @@ import com.gyeongsan.cabinet.domain.cabinet.model.LentType;
 import java.util.List;
 
 public record BulkStatusUpdateRequest(
-        List<Long> cabinetIds,
-        CabinetStatus status,
-        LentType lentType,
-        String statusNote,
-        boolean endActiveLents,
-        String reason) {}
+        List<Long> cabinetIds, CabinetStatus status, LentType lentType, String statusNote) {}

@@ -24,9 +24,6 @@ public interface CabinetRepository extends JpaRepository<Cabinet, Long> {
 
     Optional<Cabinet> findByVisibleNum(Integer visibleNum);
 
-    @Query("SELECT c.id FROM Cabinet c WHERE c.visibleNum = :visibleNum")
-    Optional<Long> findIdByVisibleNum(@Param("visibleNum") Integer visibleNum);
-
     List<Cabinet> findAllByFloor(Integer floor);
 
     List<Cabinet> findAllByStatus(CabinetStatus status);

@@ -7,8 +7,7 @@ import com.gyeongsan.cabinet.auth.jwt.JwtTokenProvider;
 import com.gyeongsan.cabinet.common.ApiResponse;
 import com.gyeongsan.cabinet.domain.auth.port.in.LinkAccountUseCase;
 import com.gyeongsan.cabinet.domain.user.model.User;
-import com.gyeongsan.cabinet.global.exception.ErrorCode;
-import com.gyeongsan.cabinet.global.exception.ServiceException;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,13 +24,13 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/v4/auth")
 @RequiredArgsConstructor
 @Log4j2
+@RateLimiter(name = "userApi")
 public class AuthController {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
     private final UserRepository userRepository;
     private final LinkAccountUseCase linkAccountUseCase;
-    private final AuthRateLimiter authRateLimiter;
 
     @Value("${app.auth.cookie-secure:false}")
     private boolean isCookieSecure;
@@ -52,17 +51,6 @@ public class AuthController {
 
         String userId = jwtTokenProvider.parseClaims(refreshToken).getSubject();
 
-        long userIdNumber;
-        try {
-            userIdNumber = Long.parseLong(userId);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Refresh Token이 만료되었거나 유효하지 않습니다.");
-        }
-        if (!authRateLimiter.allowReissue(userIdNumber)) {
-            log.warn("🛑 토큰 재발급 한도 초과 - userId: {}", userIdNumber);
-            throw new ServiceException(ErrorCode.TOO_MANY_REQUESTS);
-        }
-
         String savedToken = redisTemplate.opsForValue().get("RT:" + userId);
         if (savedToken == null || !savedToken.equals(refreshToken)) {
             log.warn("🚨 Redis 토큰 불일치! 탈취 가능성 있음. User: {}", userId);
@@ -71,7 +59,7 @@ public class AuthController {
 
         User user =
                 userRepository
-                        .findById(userIdNumber)
+                        .findById(Long.valueOf(userId))
                         .orElseThrow(() -> new IllegalArgumentException("유저가 없습니다."));
 
         String newAccessToken =
@@ -96,12 +84,6 @@ public class AuthController {
             @AuthenticationPrincipal UserPrincipal userPrincipal,
             @PathVariable("provider") String provider,
             @RequestBody OAuthLinkRequest request) {
-        if (userPrincipal == null) {
-            throw new ServiceException(ErrorCode.AUTHENTICATION_REQUIRED);
-        }
-        if (!authRateLimiter.allowLink(userPrincipal.getUserId())) {
-            throw new ServiceException(ErrorCode.TOO_MANY_REQUESTS);
-        }
         log.info("🔗 소셜 연동 요청: userId={}, provider={}", userPrincipal.getUserId(), provider);
         linkAccountUseCase.linkAccount(
                 userPrincipal.getUserId(), provider, request.getAuthorizationCode());
