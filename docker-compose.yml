@@ -61,7 +61,7 @@ services:
       - DB_HOST=mariadb
       - DB_PORT=3306
       - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false
-      - FLYWAY_ENABLED=${FLYWAY_ENABLED:-false}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - REDIS_HOST=redis
