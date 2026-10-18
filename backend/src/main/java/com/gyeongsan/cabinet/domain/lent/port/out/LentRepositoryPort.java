@@ -11,7 +11,7 @@ public interface LentRepositoryPort {
 
     Optional<LentHistory> findByUserIdAndEndedAtIsNull(Long userId);
 
-    Optional<Long> findActiveCabinetIdByUserId(Long userId);
+    boolean existsByUserId(Long userId);
 
     Optional<LentHistory> findByCabinetIdAndEndedAtIsNull(Long cabinetId);
 
@@ -22,8 +22,6 @@ public interface LentRepositoryPort {
     List<LentHistory> findAllOverdueLentHistories(LocalDateTime now);
 
     List<LentHistory> findAllActiveLentByCabinetIds(List<Long> cabinetIds);
-
-    List<LentHistory> findAllByIds(List<Long> ids);
 
     List<LentHistory> findAllActiveLentByUserIds(List<Long> userIds);
 

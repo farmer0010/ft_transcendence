@@ -1,6 +1,5 @@
 package com.gyeongsan.cabinet.adapter.in.web.user.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.gyeongsan.cabinet.domain.user.model.UserRole;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,8 +23,7 @@ public class MyProfileResponseDto {
 
     private boolean isPisciner;
 
-    @JsonProperty("isTranscender")
-    private boolean transcender;
+    private Boolean isFirstRental;
 
     private Integer penaltyDays;
     private Integer monthlyLogtime;
@@ -39,19 +37,11 @@ public class MyProfileResponseDto {
 
     private String lentStartedAt;
 
-    private LocalDateTime lentStartedAtIso;
-
     private Integer reservedVisibleNum;
 
     private Long reservationRemainingSeconds;
 
     private String expiredAt;
-
-    private LocalDateTime expiredAtIso;
-
-    private Integer daysRemaining;
-
-    private Boolean overdue;
 
     private List<MyItemDto> myItems;
     private List<CoinHistoryDto> coinHistories;

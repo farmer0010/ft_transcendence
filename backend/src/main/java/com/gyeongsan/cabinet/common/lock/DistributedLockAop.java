@@ -3,8 +3,6 @@ package com.gyeongsan.cabinet.common.lock;
 import com.gyeongsan.cabinet.global.exception.ErrorCode;
 import com.gyeongsan.cabinet.global.exception.ServiceException;
 import java.lang.reflect.Method;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -17,8 +15,6 @@ import org.springframework.core.Ordered;
 import org.springframework.core.ParameterNameDiscoverer;
 import org.springframework.core.annotation.Order;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.script.DefaultRedisScript;
-import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -31,12 +27,6 @@ import org.springframework.stereotype.Component;
 @Log4j2
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class DistributedLockAop {
-
-    private static final RedisScript<Long> RELEASE_SCRIPT =
-            new DefaultRedisScript<>(
-                    "if redis.call('GET', KEYS[1]) == ARGV[1] then"
-                            + " return redis.call('DEL', KEYS[1]) else return 0 end",
-                    Long.class);
 
     private final StringRedisTemplate redisTemplate;
     private final ParameterNameDiscoverer parameterNameDiscoverer =
@@ -72,7 +62,6 @@ public class DistributedLockAop {
         long waitTime = distributedLock.waitTime();
         long leaseTime = distributedLock.leaseTime();
 
-        String token = UUID.randomUUID().toString();
         long startTime = System.currentTimeMillis();
         boolean isLocked = false;
 
@@ -81,7 +70,7 @@ public class DistributedLockAop {
                 Boolean success =
                         redisTemplate
                                 .opsForValue()
-                                .setIfAbsent(key, token, leaseTime, TimeUnit.SECONDS);
+                                .setIfAbsent(key, "locked", leaseTime, TimeUnit.SECONDS);
                 if (Boolean.TRUE.equals(success)) {
                     isLocked = true;
                     break;
@@ -97,24 +86,8 @@ public class DistributedLockAop {
             return joinPoint.proceed();
         } finally {
             if (isLocked) {
-                release(key, token, leaseTime);
+                redisTemplate.delete(key);
             }
-        }
-    }
-
-    private void release(String key, String token, long leaseTime) {
-        try {
-            Long deleted = redisTemplate.execute(RELEASE_SCRIPT, List.of(key), token);
-            if (deleted == null || deleted == 0L) {
-                log.warn(
-                        "[DistributedLock] 락이 이미 만료되었거나 다른 요청이 가져가 해제하지 않음 - Key: {}"
-                                + " (처리 시간이 leaseTime {}초를 넘겼을 수 있음)",
-                        key,
-                        leaseTime);
-            }
-        } catch (RuntimeException e) {
-            log.error(
-                    "[DistributedLock] 락 해제 실패(lease 만료로 풀림) - Key: {}, 원인: {}", key, e.toString());
         }
     }
 }

@@ -8,7 +8,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
-import org.hibernate.annotations.ColumnDefault;
 
 @Entity
 @Table(name = "USER")
@@ -70,16 +69,8 @@ public class User {
     private boolean pushAlarm = false;
 
     @Builder.Default
-    @Column(name = "KAKAO_ALARM", nullable = false)
-    @ColumnDefault("false")
-    private boolean kakaoAlarm = false;
-
-    @Builder.Default
     @Column(name = "IS_PISCINER", nullable = false)
     private boolean isPisciner = false;
-
-    @Column(name = "FT_GRADE", length = 32)
-    private String ftGrade;
 
     protected User(
             String name,
@@ -107,10 +98,6 @@ public class User {
 
     public static User of(String name, String email, LocalDateTime blackholedAt, UserRole role) {
         return new User(name, email, blackholedAt, role, false);
-    }
-
-    public void updateKakaoAlarm(boolean enabled) {
-        this.kakaoAlarm = enabled;
     }
 
     public void updateBlackholedAt(LocalDateTime blackholedAt) {
@@ -175,13 +162,5 @@ public class User {
 
     public void updatePiscinerStatus(boolean isPisciner) {
         this.isPisciner = isPisciner;
-    }
-
-    public void updateFtGrade(String ftGrade) {
-        this.ftGrade = ftGrade;
-    }
-
-    public boolean isTranscender() {
-        return FtGradeResolver.TRANSCENDER.equals(this.ftGrade);
     }
 }

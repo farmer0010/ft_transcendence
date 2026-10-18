@@ -1,6 +1,5 @@
 package com.gyeongsan.cabinet.domain.lent.port.in;
 
-import com.gyeongsan.cabinet.domain.lent.model.LentReturnResult;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface LentUseCase {
@@ -9,7 +8,7 @@ public interface LentUseCase {
 
     void checkLentCabinetImage(Long userId, MultipartFile file);
 
-    LentReturnResult endLent(
+    void endLent(
             Long userId,
             String previousPassword,
             MultipartFile file,

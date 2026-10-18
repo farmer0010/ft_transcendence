@@ -14,8 +14,6 @@ public interface CabinetRepositoryPort {
 
     Optional<Cabinet> findByVisibleNum(Integer visibleNum);
 
-    Optional<Long> findIdByVisibleNum(Integer visibleNum);
-
     Optional<Cabinet> findByVisibleNumWithLock(Integer visibleNum);
 
     List<Cabinet> findAll();
