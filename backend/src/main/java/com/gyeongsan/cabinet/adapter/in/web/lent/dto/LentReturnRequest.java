@@ -9,12 +9,4 @@ public record LentReturnRequest(
                 @Size(min = 4, max = 4, message = "공유 비밀번호는 4자리여야 합니다.")
                 @Pattern(regexp = "\\d{4}", message = "공유 비밀번호는 숫자만 가능합니다.")
                 String shareCode,
-        String reason) {
-
-    @Override
-    public String toString() {
-        return "LentReturnRequest[shareCode=****, reason="
-                + (reason == null ? "null" : "<생략>")
-                + "]";
-    }
-}
+        String reason) {}

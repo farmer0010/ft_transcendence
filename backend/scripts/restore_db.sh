@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Cabinet Database Restore Script
+# 백업 파일에서 데이터베이스를 복원합니다.
 
 set -e
 
@@ -33,6 +35,7 @@ fi
 
 echo "🔄 Restoring database..."
 
+# 압축 해제 후 복원
 gunzip -c "$BACKUP_FILE" | docker exec -i "$CONTAINER_NAME" mysql \
   -u"$DB_USER" \
   -p"$DB_PASSWORD" \
@@ -40,3 +43,4 @@ gunzip -c "$BACKUP_FILE" | docker exec -i "$CONTAINER_NAME" mysql \
 
 echo "✅ Database restored successfully!"
 exit 0
+

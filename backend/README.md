@@ -1,357 +1,922 @@
-# 42Subak Gyeongsan
 
-## 1. 서비스 소개
+# 🗄️ 42Subak Gyeongsan Ver 1.6
 
-42 경산 캠퍼스의 사물함을 대여하고 반납하는 서비스의 백엔드(REST API 서버)입니다. 학생은 층별 사물함 목록에서 사용 가능한 사물함을 골라 31일 동안 빌릴 수 있고, 기간 안에 연장하거나 다른 사물함으로 옮길 수 있습니다.
+> **42 경산 캠퍼스 지능형 사물함 대여/반납 서비스**<br>
+> 사용자의 편의성, 공정한 이용, 게임화(Gamification), 그리고 **시스템의 안정성**을 모두 갖춘 REST API 서버입니다.
 
-주요 기능은 다음과 같습니다.
+<br>
 
-| 기능 | 설명 |
-| --- | --- |
-| 대여, 반납, 연장 | 사물함을 31일 동안 대여하고 연장권으로 기간을 늘립니다. 반납할 때는 사물함 사진을 올립니다. |
-| 이사와 예약 | 다른 사물함으로 옮깁니다. 옮길 사물함은 15분 동안 예약할 수 있고, 목록과 상세 응답에 예약 여부가 표시됩니다. |
-| AI 청결도 검사 | 반납할 때 올린 사진을 AI 서버로 보내 사물함이 깨끗한지 검사합니다. |
-| 코인과 대여권 | 출석과 월간 로그타임에 따라 코인과 대여권을 지급하고, 상점에서 아이템을 살 수 있습니다. |
-| 관리자 기능 | 사물함 상태를 일괄 변경하고, 작업 기록을 조회하고 되돌릴 수 있습니다. |
-| 알림 | 슬랙 오류제보를 관리자 DM으로, 슬랙 공지를 카카오톡으로 전달합니다. 기본값은 꺼져 있습니다. |
-| FAQ 챗봇 | 자주 묻는 질문에 미리 써 둔 답변을 찾아 돌려줍니다. 기본값은 꺼져 있습니다. |
+## 🏗️ System Architecture (시스템 아키텍처)
 
-기술 스택은 다음과 같습니다.
-
-| 구분 | 사용 기술 |
-| --- | --- |
-| 언어, 프레임워크 | Java 17, Spring Boot 3.5.8 (Web, Data JPA, Security, OAuth2 Client, WebFlux) |
-| 데이터 | MariaDB, Flyway(스키마 마이그레이션), Redis(토큰, 분산 락, 스트림, 예약) |
-| 인증 | 42, 카카오, 구글 OAuth 로그인 후 JWT 발급 |
-| 안정성 | Resilience4j(서킷 브레이커, 호출 제한), ShedLock |
-| 문서와 모니터링 | springdoc(Swagger UI), Actuator, Prometheus, Grafana |
-| 실행 | Docker Compose, Nginx |
-| 외부 연동 | Slack, Azure Blob Storage, AI 청결도 검사 서버(Python FastAPI) |
-
-### 전체 아키텍처
-
-클라이언트의 요청은 Nginx를 거쳐 Spring Boot 백엔드로 들어옵니다. 백엔드는 데이터를 MariaDB에, 토큰과 예약과 분산 락과 메시지 스트림을 Redis에 둡니다. 사진 검사와 저장, 로그인, 알림은 외부 서비스에 맡깁니다.
+> **Dockerized Infra & Monitoring System**<br>
+> Nginx 리버스 프록시와 Prometheus/Grafana 모니터링 시스템이 구축되었습니다.
 
 ```mermaid
-flowchart LR
-    Client["브라우저<br/>프론트엔드"]
-
-    subgraph Compose["Docker Compose"]
-        Nginx["Nginx<br/>리버스 프록시"]
-        subgraph App["백엔드(Spring Boot)"]
-            Web["REST API<br/>JWT 필터, 호출 제한"]
-            Batch["스케줄러<br/>ShedLock"]
-            Consumer["Redis Streams<br/>소비자"]
-            Core["유스케이스와 도메인 서비스<br/>대여, 반납, 상점, 관리자, 챗봇"]
-        end
-        DB[("MariaDB 10.6<br/>Flyway 로 스키마 관리")]
-        Redis[("Redis<br/>토큰, 예약, 락, 스트림")]
-        Prom["Prometheus"]
-        Graf["Grafana"]
+graph TD
+    %% 클라이언트 및 진입점
+    Client(["User Client<br>Web/Mobile"]) -->|HTTP / Port 80| Nginx["🦁 Nginx Web Server<br>Reverse Proxy"]
+    
+    %% 백엔드 영역
+    subgraph "Backend Container"
+        Nginx -->|"Proxy Pass<br>Port 8080"| SpringBoot["☕ Core API Server<br>Spring Boot 3.5"]
+        Security["Spring Security<br>JWT Filter"]
+        Scheduler["Schedulers<br>Lent/Logtime (ShedLock)"]
     end
 
-    subgraph External["외부 서비스"]
-        OAuth["42, 카카오, 구글<br/>OAuth 로그인"]
-        AI["AI 서버(FastAPI)<br/>사진 청결도 검사"]
-        Blob["Azure Blob Storage<br/>반납 사진 저장"]
-        FT["42 API<br/>로그타임, 등급 조회"]
-        Slack["Slack<br/>DM 발송, 채널 읽기"]
-        KakaoTalk["카카오톡 메시지<br/>공지 알림(선택)"]
-        Gemini["Gemini API<br/>긴 공지 요약(선택)"]
+    %% 모니터링 영역 (New)
+    subgraph "Monitoring System"
+        Prometheus["🔥 Prometheus<br>Metric Collector"]
+        Grafana["📊 Grafana<br>Visualization"]
+        
+        SpringBoot -.->|"/actuator/prometheus"| Prometheus
+        Prometheus -->|"Data Source"| Grafana
     end
 
-    Client -->|"HTTP 80"| Nginx
-    Nginx -->|"8080"| Web
-    Web --> Core
-    Batch --> Core
-    Consumer --> Core
-    Core --> DB
-    Core --> Redis
-    Prom -->|"/actuator/prometheus"| Web
-    Prom --> Graf
-    Web --> OAuth
-    Core --> AI
-    Core --> Blob
-    Core --> FT
-    Core --> Slack
-    Core --> KakaoTalk
-    Core --> Gemini
+    %% 데이터 영역
+    subgraph "Data Persistence"
+        MariaDB[("🐬 MariaDB 10.6<br>Main DB")]
+    end
+
+    %% 클라우드 관리형 서비스
+    subgraph "Cloud Managed Services"
+        Redis[("☁️ Azure Managed Redis<br>Token/Cache/ShedLock")]
+    end
+
+    %% 외부 서비스
+    subgraph "External Services"
+        AI_Server["🤖 AI Server<br>Python FastAPI"]
+        Intra_API["42 Intra API<br>OAuth2"]
+        Kakao_API["💬 Kakao API<br>OAuth2"]
+        Google_API["🔍 Google API<br>OAuth2"]
+        Slack["Slack Bot<br>Web API"]
+        Azure_Blob["☁️ Azure Blob<br>Image Storage"]
+    end
+
+    %% 연결 관계
+    SpringBoot -->|Read/Write| MariaDB
+    SpringBoot -->|Cache/Session| Redis
+    SpringBoot -->|"WebClient<br>Async Request"| AI_Server
+    AI_Server -->|"Analysis Result"| SpringBoot
+    SpringBoot -->|"OAuth2 Auth"| Intra_API
+    SpringBoot -->|"OAuth2 Link/Auth"| Kakao_API
+    SpringBoot -->|"OAuth2 Link/Auth"| Google_API
+    SpringBoot -->|API Call| Slack
+    SpringBoot -->|"Image Upload"| Azure_Blob
+    Scheduler -.->|"Distributed Lock"| Redis
+    Security -.->|"Verify RT"| Redis
 ```
 
-Prometheus가 지표를 가져오는 경로(`/actuator/prometheus`)는 관리자 권한이 필요해서 현재는 401로 실패합니다. 자세한 내용은 5번 항목에 있습니다.
+<br>
 
-### 코드 구조
+## 🗺️ User Flow (서비스 이용 흐름도)
 
-코드는 헥사고날 구조(포트와 어댑터)로 나뉘어 있습니다. 컨트롤러와 스케줄러 같은 들어오는 어댑터는 `domain`의 `port.in` 인터페이스만 호출하고, 서비스는 데이터베이스나 외부 API를 `port.out` 인터페이스로만 사용합니다. 실제 구현은 나가는 어댑터가 맡습니다.
+> 사용자가 로그인부터 반납, 상점 이용까지 경험하는 주요 프로세스입니다.
 
 ```mermaid
-flowchart LR
-    subgraph In["adapter.in"]
-        W["web<br/>REST Controller"]
-        S["scheduler<br/>스케줄러, 스트림 소비자"]
-    end
+flowchart TD
+    %% 노드 스타일 정의
+    classDef start fill:#f9f,stroke:#333,stroke-width:2px,color:black;
+    classDef process fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:black;
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:2px,color:black;
+    classDef endNode fill:#eeeeee,stroke:#333,stroke-width:2px,color:black;
 
-    subgraph Core["domain 과 application"]
-        PIn["port.in<br/>유스케이스 인터페이스"]
-        Svc["service<br/>유스케이스 구현"]
-        Model["model<br/>엔티티와 규칙"]
-        POut["port.out<br/>저장소와 외부 시스템 인터페이스"]
-    end
+    Start((Start)):::start --> Login["🔐 42 Intra 로그인"]:::process
+    Login --> Main["🏠 메인 페이지 / 대시보드"]:::process
 
-    subgraph Out["adapter.out"]
-        P["persistence<br/>JPA 저장소"]
-        R["cache.redis<br/>예약, 커서"]
-        E["external<br/>ai, azure, ft, slack, kakao, google, gemini"]
-        M["embedding, crypto, metrics"]
-    end
+    %% 메인 페이지에서의 분기
+    Main --> Action_Lent{"사물함 대여?"}:::decision
+    Main --> Action_My{"내 정보 관리?"}:::decision
+    Main --> Action_Store{"상점 이용?"}:::decision
+    Main --> Action_Attend{"출석 체크?"}:::decision
+    Main --> Action_Calendar{"일정 확인?"}:::decision
 
-    W --> PIn
-    S --> PIn
-    Svc -.->|"구현"| PIn
-    Svc --> Model
-    Svc --> POut
-    P -.->|"구현"| POut
-    R -.->|"구현"| POut
-    E -.->|"구현"| POut
-    M -.->|"구현"| POut
+    %% 1. 대여 프로세스
+    Action_Lent -- Yes --> Select["📦 사물함 선택"]:::process
+    Select --> Check_Lent{"대여 가능?"}:::decision
+    Check_Lent -- "No (Full/Ban)" --> Main
+    Check_Lent -- Yes --> Rent_Success["🔑 대여 완료"]:::process
+    Rent_Success --> Main
+
+    %% 2. 내 정보 & 반납 프로세스
+    Action_My -- Yes --> MyPage["👤 마이 페이지"]:::process
+    MyPage --> Return_Btn{"반납 하기?"}:::decision
+    Return_Btn -- Yes --> Upload["📸 인증 사진 업로드"]:::process
+    Upload --> AI_Check{"AI 청결도 검사"}:::decision
+    AI_Check -- Fail --> Manual["수동 반납 요청 (사유 입력)"]:::process
+    AI_Check -- Pass --> Return_Success["✅ 반납 완료"]:::process
+    Manual --> Main
+    Return_Success --> Main
+
+    %% 3. 상점 프로세스
+    Action_Store -- Yes --> Store["🏪 아이템 상점"]:::process
+    Store --> Buy{"아이템 구매?"}:::decision
+    Buy -- "연장권" --> Use_Ext["⏳ 기간 연장"]:::process
+    Buy -- "이사권" --> Use_Swap["🚚 사물함 이동"]:::process
+    Use_Ext --> Main
+    Use_Swap --> Main
+
+    %% 4. 출석 및 캘린더 프로세스
+    Action_Attend -- Click --> Reward["💰 코인 획득"]:::process
+    Action_Calendar -- Click --> Calendar["📅 캘린더 페이지"]:::process
+    Reward --> Main
+    Calendar --> Main
+
+    %% 종료
+    Main --> Logout{"로그아웃?"}:::decision
+    Logout -- Yes --> End((End)):::endNode
 ```
 
-데이터베이스 마이그레이션은 `src/main/resources/db/migration`에 있고, 그 밖의 기술 문서는 `docs/`에 있습니다.
+<br>
 
-### 시스템 흐름도
+## 📂 Project Structure (상세 프로젝트 구조)
 
-주요 흐름 네 가지를 정리했습니다.
+> **Core Architecture:** Hexagonal Architecture<br>
+> 도메인 로직이 외부 인프라(DB, Redis, AI, Slack 등)에 의존하지 않도록 **Port 인터페이스**로 추상화하고,<br>
+> 각 인프라 기술을 **Adapter**로 분리하여 테스트 용이성과 교체 가능성을 확보했습니다.
 
-#### 로그인
+```text
+.
+├── .github/workflows/gradle.yml        # Github Actions CI/CD 파이프라인
+├── .env                                # [Secret] DB, TimeZone, Root Password
+├── build.gradle                        # 의존성: WebFlux, Actuator, Resilience4j
+├── docker-compose.yaml                 # [Infra] Full Stack Orchestration
+├── nginx/conf.d/default.conf           # [Infra] Nginx Reverse Proxy Config
+├── prometheus/prometheus.yml           # [Infra] Monitoring Config
+├── src
+│   ├── main
+│   │   ├── java/com/gyeongsan/cabinet
+│   │   │   ├── CabinetApplication.java
+│   │   │   │
+│   │   │   ├── domain                  # ═══ 도메인 계층 (핵심 비즈니스 + 엔티티 모델) ═══
+│   │   │   │   ├── cabinet
+│   │   │   │   │   ├── model/Cabinet.java, CabinetStatus.java, LentType.java
+│   │   │   │   │   ├── port/in/CabinetQueryUseCase.java      # Inbound Port
+│   │   │   │   │   ├── port/out/CabinetRepositoryPort.java   # Outbound Port
+│   │   │   │   │   └── service/CabinetDomainService.java     # 도메인 서비스
+│   │   │   │   ├── user
+│   │   │   │   │   ├── model/User.java, Attendance.java, BannedUser.java, UserRole.java
+│   │   │   │   │   ├── port/in/UserUseCase.java
+│   │   │   │   │   ├── port/out/UserRepositoryPort.java
+│   │   │   │   │   ├── port/out/AttendanceRepositoryPort.java
+│   │   │   │   │   ├── port/out/BannedUserRepositoryPort.java
+│   │   │   │   │   └── service/UserDomainService.java
+│   │   │   │   ├── lent
+│   │   │   │   │   ├── model/LentHistory.java
+│   │   │   │   │   ├── port/in/LentUseCase.java
+│   │   │   │   │   ├── port/out/LentRepositoryPort.java
+│   │   │   │   │   ├── port/out/ReservationPort.java         # Redis 추상화
+│   │   │   │   │   ├── port/out/ImageUploadPort.java         # Azure 추상화
+│   │   │   │   │   ├── port/out/AiCheckPort.java             # AI 서버 추상화
+│   │   │   │   │   └── port/out/FtApiPort.java               # 42 API 추상화
+│   │   │   │   ├── item
+│   │   │   │   │   ├── model/Item.java, ItemHistory.java, ItemType.java
+│   │   │   │   │   ├── port/in/StoreUseCase.java
+│   │   │   │   │   ├── port/out/ItemRepositoryPort.java
+│   │   │   │   │   ├── port/out/ItemHistoryRepositoryPort.java
+│   │   │   │   │   └── service/StoreDomainService.java
+│   │   │   │   ├── coin
+│   │   │   │   │   ├── model/CoinHistory.java, CoinLogType.java
+│   │   │   │   │   └── port/out/CoinHistoryRepositoryPort.java
+│   │   │   │   ├── calendar
+│   │   │   │   │   ├── model/CalendarEvent.java
+│   │   │   │   │   ├── port/in/CalendarUseCase.java
+│   │   │   │   │   ├── port/out/CalendarEventRepositoryPort.java
+│   │   │   │   │   └── service/CalendarDomainService.java
+│   │   │   │   ├── alarm
+│   │   │   │   │   └── port/out/AlarmPort.java                # 알림 추상화
+│   │   │   │   ├── auth
+│   │   │   │   │   ├── port/in/LinkAccountUseCase.java        # Inbound Port
+│   │   │   │   │   ├── port/out/OauthLinkRepositoryPort.java  # Outbound Port
+│   │   │   │   │   ├── port/out/OAuthApiClientPort.java       # Outbound Port
+│   │   │   │   │   └── service/OauthLinkService.java          # 도메인 서비스
+│   │   │   │   ├── watermelon
+│   │   │   │   │   ├── port/in/GetWatermelonStatusUseCase.java, EnhanceWatermelonUseCase.java, BuyWatermelonItemUseCase.java, GetWatermelonLeaderboardUseCase.java
+│   │   │   │   │   ├── port/out/WatermelonRepositoryPort.java, WatermelonEventLogRepositoryPort.java
+│   │   │   │   │   ├── service/WatermelonEventService.java     # 도메인 서비스
+│   │   │   │   │   └── domain/                                 # 도메인 모델 & Config
+│   │   │   │   └── admin                                       # [Admin] Port 인터페이스 6개
+│   │   │   │       ├── port/in/AdminDashboardUseCase.java, AdminUserUseCase.java, AdminCabinetUseCase.java, AdminItemCoinUseCase.java, AdminBannedUserUseCase.java, AdminAlarmUseCase.java
+│   │   │   │       └── service/AdminDashboardService.java, AdminUserService.java, AdminCabinetService.java, AdminItemCoinService.java, AdminBannedUserService.java, AdminAlarmService.java
+│   │   │   │
+│   │   │   ├── application             # ═══ 애플리케이션 계층 (유스케이스 조합) ═══
+│   │   │   │   └── lent
+│   │   │   │       └── LentApplicationService.java   # 대여 프로세스 오케스트레이션
+│   │   │   │
+│   │   │   ├── adapter                 # ═══ 어댑터 계층 (인프라 구현체) ═══
+│   │   │   │   ├── in/web              # --- Inbound Adapter (Controller + DTO) ---
+│   │   │   │   │   ├── cabinet/CabinetController.java
+│   │   │   │   │   ├── user/UserController.java
+│   │   │   │   │   ├── lent/LentController.java
+│   │   │   │   │   ├── item/StoreController.java
+│   │   │   │   │   ├── calendar/CalendarEventController.java
+│   │   │   │   │   ├── admin/AdminController.java
+│   │   │   │   │   ├── auth/AuthController.java
+│   │   │   │   │   └── watermelon/WatermelonEventController.java
+│   │   │   │   ├── in/scheduler        # --- Inbound Adapter (Scheduler) ---
+│   │   │   │   │   ├── lent/LentScheduler.java              # D-7/D-1 알림, 자동 연장, 연체 처리
+│   │   │   │   │   └── user/LogtimeScheduler.java, LogtimeStreamListener.java
+│   │   │   │   ├── out/persistence     # --- Outbound Adapter (DB) ---
+│   │   │   │   │   ├── cabinet/CabinetPersistenceAdapter.java
+│   │   │   │   │   ├── user/UserPersistenceAdapter.java
+│   │   │   │   │   ├── user/AttendancePersistenceAdapter.java
+│   │   │   │   │   ├── user/BannedUserPersistenceAdapter.java
+│   │   │   │   │   ├── lent/LentPersistenceAdapter.java
+│   │   │   │   │   ├── item/ItemPersistenceAdapter.java
+│   │   │   │   │   ├── item/ItemHistoryPersistenceAdapter.java
+│   │   │   │   │   ├── coin/CoinHistoryPersistenceAdapter.java
+│   │   │   │   │   ├── calendar/CalendarEventPersistenceAdapter.java
+│   │   │   │   │   ├── auth/OauthLinkPersistenceAdapter.java
+│   │   │   │   │   └── watermelon/WatermelonPersistenceAdapter.java
+│   │   │   │   ├── out/external        # --- Outbound Adapter (외부 서비스) ---
+│   │   │   │   │   ├── ai/AiServerAdapter.java       # AI 서버 통신
+│   │   │   │   │   ├── azure/AzureBlobAdapter.java    # Azure 이미지 업로드
+│   │   │   │   │   ├── slack/SlackAlarmAdapter.java    # Slack DM 전송
+│   │   │   │   │   ├── ft/FtApiAdapter.java            # 42 API 통신
+│   │   │   │   │   ├── kakao/KakaoOAuthApiClientAdapter.java
+│   │   │   │   │   └── google/GoogleOAuthApiClientAdapter.java
+│   │   │   │   └── out/cache           # --- Outbound Adapter (캐시) ---
+│   │   │   │       └── redis/ReservationRedisAdapter.java  # 사물함 예약
+│   │   │   │
+│   │   │   ├── alarm                   # [Alarm] 비동기 알림 이벤트 (Redis Streams)
+│   │   │   │   ├── dto/AlarmEvent.java
+│   │   │   │   ├── AlarmEventHandler.java
+│   │   │   │   ├── SlackAlarmStreamListener.java
+│   │   │   │   └── SlackBotService.java
+│   │   │   │
+│   │   │   ├── auth                    # [Auth] 스프링 시큐리티 및 JWT 필터링 설정
+│   │   │   │   ├── config/SecurityConfig.java, CookieOAuth2AuthorizationRequestRepository.java
+│   │   │   │   ├── domain/UserPrincipal.java
+│   │   │   │   ├── exception/CustomAccessDeniedHandler.java, CustomAuthenticationEntryPoint.java
+│   │   │   │   ├── jwt/JwtTokenProvider.java, JwtAuthenticationFilter.java
+│   │   │   │   ├── oauth/OAuth2SuccessHandler.java
+│   │   │   │   └── service/CustomOAuth2UserService.java
+│   │   │   │
+│   │   │   ├── common                  # [Common] 공용 응답/락/Redis 유틸
+│   │   │   │   ├── ApiResponse.java, dto/MessageResponse.java
+│   │   │   │   ├── lock/DistributedLock.java, DistributedLockAop.java
+│   │   │   │   └── redis/RedisService.java
+│   │   │   │
+│   │   │   ├── config                  # [Config] 인프라 빈 설정
+│   │   │   │   └── RedisConfig.java, RedisStreamConfig.java, ShedLockConfig.java, WebConfig.java
+│   │   │   │
+│   │   │   ├── global                  # [Global] 전역 설정, 예외 처리
+│   │   │   │   ├── aspect/LoggingAspect.java
+│   │   │   │   └── exception/ErrorCode.java, GlobalExceptionHandler.java, ServiceException.java
+│   │   │   │
+│   │   │   └── utils/FtApiManager.java # 42 API 통신 모듈
+│   │   │
+│   │   └── resources
+│   │       ├── application.yml
+│   │       ├── logback-spring.xml
+│   │       ├── secret.properties       # [Secret] Git 제외
+│   │       └── static/index.html
+│   │
+│   └── test
+│       └── java/com/gyeongsan/cabinet/CabinetApplicationTests.java
+```
 
-42, 카카오, 구글 중 하나로 로그인하면 백엔드가 JWT를 발급해 쿠키로 내려줍니다. 처음 가입한 사용자에게는 대여권을 한 장 지급합니다.
+### 🔀 의존성 방향 (Dependency Rule)
 
+```mermaid
+graph LR
+    subgraph "Adapter 계층"
+        WEB["🌐 Web Adapter<br>(Controller)"]
+        DB["🗄️ Persistence Adapter<br>(JPA)"]
+        EXT["🔌 External Adapter<br>(AI, Slack, Azure, 42API)"]
+        CACHE["🔴 Cache Adapter<br>(Redis)"]
+    end
+
+    subgraph "Application 계층"
+        APP["⚙️ Application Service<br>(UseCase 조합)"]
+    end
+
+    subgraph "Domain 계층"
+        PORT_IN["📥 Inbound Port<br>(UseCase Interface)"]
+        DOMAIN["💎 Domain Service<br>(비즈니스 로직)"]
+        PORT_OUT["📤 Outbound Port<br>(SPI Interface)"]
+    end
+
+    WEB -->|의존| PORT_IN
+    PORT_IN -.->|구현| DOMAIN
+    PORT_IN -.->|구현| APP
+    DOMAIN -->|의존| PORT_OUT
+    APP -->|의존| PORT_OUT
+    DB -.->|구현| PORT_OUT
+    EXT -.->|구현| PORT_OUT
+    CACHE -.->|구현| PORT_OUT
+```
+
+<br>
+
+## 📊 Database Schema (ERD)
+
+> **Entity Relationship Diagram**<br>
+> 프로젝트의 데이터베이스 구조와 엔티티 간의 상관관계를 나타냅니다.
+
+```mermaid
+erDiagram
+    %% -------------------------------------------------------------------------------------
+    %% 관계 (Relationships) - 한글화
+    %% -------------------------------------------------------------------------------------
+    
+    USER ||--o{ ATTENDANCE : "출석체크 함"
+    USER ||--o{ LENT_HISTORY : "대여 기록 보유"
+    USER ||--o{ ITEM_HISTORY : "아이템 구매/사용 이력"
+    USER ||--o{ COIN_HISTORY : "코인 거래 이력"
+    USER ||--o{ CALENDAR_EVENT : "일정 등록"
+    USER ||--o{ OAUTH_LINK : "소셜 연동 정보 보유"
+    
+    CABINET ||--o{ LENT_HISTORY : "대여 이력 포함"
+    
+    ITEM ||--o{ ITEM_HISTORY : "아이템 정보 참조"
+
+    %% -------------------------------------------------------------------------------------
+    %% 엔티티 정의 (Entity Definitions)
+    %% -------------------------------------------------------------------------------------
+
+    USER {
+        Long id PK
+        Long version "낙관적 락 버전"
+        String name "유니크 - 인트라 ID"
+        String email "유니크 - 이메일"
+        String role "권한 - USER ADMIN MASTER"
+        Long coin "보유 코인"
+        Integer penaltyDays "패널티 일수"
+        Integer monthlyLogtime "월간 접속 시간"
+        LocalDateTime blackholedAt "블랙홀 날짜"
+        LocalDateTime deletedAt "탈퇴 날짜"
+        boolean slackAlarm "슬랙 알림 여부"
+        boolean emailAlarm "이메일 알림 여부"
+        boolean pushAlarm "푸시 알림 여부"
+        boolean isPisciner "피시너 여부"
+    }
+
+    ATTENDANCE {
+        Long id PK
+        Long user_id FK "유저 ID"
+        LocalDate attendanceDate "출석 날짜"
+    }
+
+    LENT_HISTORY {
+        Long id PK
+        Long user_id FK "유저 ID"
+        Long cabinet_id FK "사물함 ID"
+        LocalDateTime startedAt "대여 시작일"
+        LocalDateTime expiredAt "대여 만료일"
+        LocalDateTime endedAt "반납일 - null이면 대여중"
+        String returnMemo "반납 시 메모"
+        boolean isAutoExtension "자동 연장 설정"
+        String photoUrl "반납 사진 URL"
+    }
+
+    CABINET {
+        Long id PK
+        Integer visibleNum "사물함 번호"
+        String status "상태 - AVAILABLE FULL BROKEN PENDING DISABLED"
+        String lentType "타입 - PRIVATE LAPISCINE"
+        Integer maxUser "최대 수용 인원"
+        String statusNote "상태 비고"
+        Integer floor "층"
+        String section "구역"
+        Integer row "그리드 행 위치"
+        Integer col "그리드 열 위치"
+    }
+
+    ITEM {
+        Long id PK
+        String name "아이템 이름"
+        String type "타입 - EXTENSION SWAP LENT EXEMPTION"
+        Long price "가격"
+        String description "설명"
+    }
+
+    ITEM_HISTORY {
+        Long id PK
+        Long user_id FK "유저 ID"
+        Long item_id FK "아이템 ID"
+        LocalDateTime purchaseAt "구매 일시"
+        LocalDateTime usedAt "사용 일시 - null이면 미사용"
+    }
+
+    COIN_HISTORY {
+        Long id PK
+        Long user_id FK "유저 ID"
+        Long amount "거래량 - 양수 지급 음수 사용"
+        String type "ATTENDANCE WATERMELON ITEM_PURCHASE ADMIN_GRANT ADMIN_REVOKE"
+        String description "상세 사유"
+        LocalDateTime createdAt "거래 발생 시각"
+    }
+
+    CALENDAR_EVENT {
+        Long id PK
+        String title "일정 제목"
+        String description "상세 설명"
+        LocalDate eventDate "일정 날짜"
+        LocalDateTime createdAt "생성일"
+        Long announcer_id FK "작성자 User"
+    }
+
+    BANNED_USER {
+        Long id PK
+        String intraId "차단된 유저 인트라 ID"
+        String reason "차단 사유"
+        LocalDateTime bannedAt "차단 일시"
+    }
+
+    OAUTH_LINK {
+        Long id PK
+        Long user_id FK "유저 ID"
+        String provider "소셜 공급사 - kakao, google"
+        String providerId "소셜 고유 ID"
+        String providerEmail "소셜 이메일"
+        LocalDateTime linkedAt "연동 일시"
+    }
+```
+
+<br>
+
+## 📜 Version History (개발 연혁)
+
+| 버전 | 주요 변화 | 상세 내용 |
+| :--- | :--- | :--- |
+| **Ver 0.1** | **MVP** | 핵심 대여/반납 로직 구현, DB 비관적 락(Pessimistic Lock) 적용 |
+| **Ver 0.2** | **Security** | 민감 정보 분리(`.env`), 스케줄러 N+1 문제 해결, 로깅 시스템 구축 |
+| **Ver 0.3** | **Auth** | **Spring Security + JWT** 도입 (Stateless 전환), 42 OAuth2 연동 |
+| **Ver 0.4** | **Gamification** | **패널티($D*3$)**, **아이템 상점(이사/연장/감면)** 구현 |
+| **Ver 0.5** | **AI & Admin** | **AI 청결도 검사**, **Exif 보안**, 관리자 수동 승인 프로세스, 블랙홀 유저 보호 |
+| **Ver 0.6** | **Infra & DevOps** | **Docker Compose**, **Nginx**(Reverse Proxy), **Prometheus & Grafana**(Monitoring) 도입 |
+| **Ver 0.7** | **Stability & UX** | **반납/이사 사유 입력**, **코인 동시성 제어(낙관적 락)** 보안 패치 |
+| **Ver 0.8** | **Auto-Extension** | **자동 연장 시스템**, **스케줄러 고도화(D-7/D-1 알림)**, 관리자 모니터링 API 추가 |
+| **Ver 0.9** | **Logic Refinement** | **블랙홀 유예(D+7)**, **스케줄러 최적화(시간분산)**, **Intra ID 알림**, 블랙홀 대여제한 해제 |
+| **Ver 1.0** | **Production Release** | **인앱 카메라 전용 모드**, **코인 거래 추적 시스템**, **캘린더 일정 관리**, **블랙리스트 관리 API**, Rate Limiting, 하드코딩 값 외부화 등 프로덕션 안정화 완료 |
+| **Ver 1.1** | **Hexagonal Architecture** | 레이어드 → **헥사고날(Ports & Adapters)** 아키텍처 전환. **18개 Port 인터페이스**, **14개 Adapter**, **5개 Domain Service** 구축. 도메인 로직의 인프라 독립성 확보 및 테스트 용이성 강화. API 계약 변경 없음 |
+| **Ver 1.2** | **Social Login & Extension** | 카카오 및 구글 소셜 로그인 연동 모듈 추가. 헥사고날(Ports & Adapters) 아키텍처에 부합하도록 인증 및 연동 구조 리팩토링 및 다형성(Strategy Pattern) 적용. 연동용 API 엔드포인트 공통화 (`/v4/auth/link/{provider}`) 및 예외 복구 흐름 개선 |
+| **Ver 1.3** | **Pisciner Identification & Cabinet Restriction** | 42 API `cursus_users`를 활용한 피시너 자동 식별(`cursus_id=9` 판별). 피시너 전용 사물함(`LAPISCINE` 타입) 대여 제한 적용. 관리자 LentType 일괄 변경 API 추가. 피시너 연장 차단. 본과정 합류 시 자동 전환 |
+| **Ver 1.4** | **Azure Redis & Stability** | **Azure Managed Redis** 연동 및 내장 레디스 완전 제거. **ShedLock**을 통한 분산 서버 스케줄러 동시성 제어 적용. JWT Access Token에 role 등 Claims 포함(최신 상태 반영을 위해 인증 시 DB 조회는 유지, 향후 최적화 예정). 12-Factor App 보안 구성을 통한 환경 변수 분리 및 SSL 단방향 적용 |
+| **Ver 1.5** | **Redis Streams Async Queue** | 대규모 트래픽 확장에 대비하여 **Redis Streams** 기반 비동기 이벤트 큐 시스템 구축. 외부 통신(Slack 알림 발송, 42 API 로그타임 집계)에 의한 메인 서버 블로킹 방지 및 분산 워커 처리 적용 |
+| **Ver 1.6** | **Core Refactoring & Isolation** | **비관적/낙관적(Redis) 분산 락**을 상황에 맞게 적용(사물함 대여 동시성 제어, 코인 사용 등). **Rich Domain Model**로 전환하여 서비스 레이어의 비즈니스 응집도 향상. **Hexagonal Architecture(Package by Feature)** 완전 적용으로 도메인별 디렉토리 철저한 분리 구축. **Jacoco/Spotless/Pre-commit** 도입으로 코드 품질 검증 자동화 완비 |
+
+<br>
+
+## 🛠 Tech Stack
+
+| 분류 | 기술 |
+| :--- | :--- |
+| **Backend** | Java 17, **Spring Boot 3.5.8**, Spring Security, Spring Data JPA |
+| **Database** | MariaDB 10.6, **Azure Managed Redis** (Token/Cache/ShedLock/Streams) |
+| **Infra** | **Docker Compose**, Azure App Service, **Nginx** (Reverse Proxy) |
+| **Monitoring** | **Prometheus** (Metrics), **Grafana** (Visualization), **Actuator** |
+| **Stability** | **Graceful Shutdown**, **DB Indexing**, **Resilience4j**, **Logback (Rolling)** |
+| **Tools** | Gradle, **Slack Bot (Web API)**, **Spring Actuator** |
+| **AI Module** | **WebFlux (WebClient)**, Python FastAPI (Image Analysis) |
+
+<br>
+
+## 🚀 Key Features (상세 기능 설명)
+
+### 1. 🏗️ 탄탄한 인프라 및 모니터링 (Infrastructure & Monitoring)
+* **Nginx Reverse Proxy:** 80 포트로 유입되는 트래픽을 관리하며, 실제 유저 IP(`X-Forwarded-For`)를 백엔드로 안전하게 전달합니다.
+* **Full Dockerization:** 백엔드, DB, Redis, Nginx, 모니터링 툴까지 `docker-compose`로 한 번에 오케스트레이션합니다.
+* **Prometheus & Grafana:** JVM 메모리, CPU 사용량, DB 커넥션 풀 상태를 실시간 시각화하여 장애를 사전에 감지합니다.
+
+### 2. 🤖 개선된 AI 반납 시스템 (AI-Powered Return)
+* **AI 청결도 검사:** 반납 시 업로드한 사물함 내부 사진을 Python(FastAPI) AI 서버로 실시간 전송. 쓰레기나 짐 방치 여부를 분석하여 자동 승인/거절 처리.
+* **인앱 카메라 검증 (In-App Camera):** 갤러리 업로드를 차단하고 **앱 내 카메라로만 촬영**하도록 강제하여, 과거 사진이나 캡처본을 이용한 어뷰징을 원천 차단했습니다. (Exif 메타데이터 의존성 제거)
+* **수동 반납 (사유 입력):** AI 검사 실패 시, 사용자가 직접 **사유를 입력하고 강제 반납**을 요청할 수 있습니다. 사물함은 `PENDING` 상태가 되며 관리자가 해당 사유를 확인 후 승인합니다.
+
+### 3. 🍉 수동 출석 & 황금 수박 이벤트 (New in v5.0)
+* **수동 출석:** 기존 자동 집계 방식을 폐지하고, 유저가 홈페이지의 **[출석하기]** 버튼을 직접 눌러야 코인을 획득하도록 변경 (유저 리텐션 강화).
+* **보상 체계:**
+    * **Daily:** 매일 1회 **100 코인** 지급.
+    * **Golden Watermelon:** 매월 **20회차** 출석 달성 시 **2,000 코인** 보너스 지급.
+
+### 4. 🛡️ 시스템 안정성 및 성능 (Robustness & Performance)
+* **상황 맞춤형 락 분리 적용:** 
+    * 사물함 선착순 대여 등 트랜잭션 충돌이 빈번한 곳에는 **Pessimistic Lock(비관적 락)**을 적용하여 성능과 정합성을 보장.
+    * 코인, 이사권 등 충돌 빈도가 낮으나 정합성이 생명인 곳에는 **Optimistic Lock(낙관적 락, `@Version`)** 적용.
+    * Redis Streams 분산 워커 및 스케줄러 동시성 제어에는 **Redis 기반 분산 락(ShedLock 등)** 적용.
+* **비동기 이벤트 큐 (Redis Streams):** 무거운 외부 API 통신(슬랙 알림 전송, 3,000명 단위의 42 API 로그타임 집계)을 메인 스레드에서 분리하여 Redis 큐로 위임. 사용자 응답 지연을 방지하고 분산 워커 환경을 완벽하게 지원합니다.
+* **Graceful Shutdown:** 배포나 서버 재시작 시, 진행 중인 대여/반납 요청을 강제로 끊지 않고 **안전하게 완료한 뒤 종료**되도록 설정하여 데이터 유실을 방지합니다.
+* **DB 인덱싱(Indexing):** 대여 기록(`LentHistory`)의 핵심 컬럼(`user_id`, `cabinet_id`, `ended_at`)에 인덱스를 적용하여, 데이터가 수십만 건 쌓여도 **조회 속도가 저하되지 않도록 최적화**했습니다.
+* **Timezone 동기화:** Docker 컨테이너 레벨에서 `Asia/Seoul` 타임존을 강제하여, 서버 환경에 상관없이 **출석 체크와 연체료 계산**이 정확한 시간에 수행됩니다.
+* **WebClient Timeout:** AI 서버 통신 시 3초 타임아웃을 강제 적용하여 외부 장애 전파를 차단합니다.
+* **분산 스케줄러 락 (ShedLock):** Azure Managed Redis 기반의 분산 락을 도입하여 다중 서버(Scale-out) 환경이나 무중단 배포 시 스케줄러가 중복 실행되어 데이터 정합성이 깨지는 문제를 원천 차단했습니다.
+* **JWT 인증:** Access Token에 role 등 Claims를 포함하며, 인증 시에는 최신 사용자 상태 반영을 위해 DB 조회를 유지합니다(Claims 기반 조회 생략은 추후 최적화 과제). Refresh Token은 Redis로 안전하게 관리합니다.
+* **Logback Rolling Policy:** 로그 파일 용량(10MB/3GB) 제한으로 디스크 장애 예방.
+
+### 5. 🎮 게임화 및 상점 (Gamification)
+* **패널티($D*3$):** 연체 시 `연체일수 * 3` 만큼 대여 불가 기간을 부여하여 정시 반납 유도.
+* **아이템 상점:** 출석과 로그타임으로 모은 코인을 사용하여 아이템 구매.
+    * **🚚 이사권 (Swap):** 반납 절차 없이 즉시 다른 빈 사물함으로 이동.
+    * **⏳ 연장권 (Extension):** 현재 대여 중인 사물함 기간을 15일 연장. (최대 **5회** 연장 가능)
+    * **🛡️ 감면권 (Exemption):** 연체 패널티 기간 1일 감면.
+    * **⏳ 자동 연장 (Auto-Extension):** (New) 유저가 **자동 연장 설정(`ON`)**을 하고 연장권을 보유 중이라면, 대여 만료 1일 전(`D-1`) 시스템이 자동으로 아이템을 사용하여 연장합니다.
+
+### 6. 👑 관리자 기능 (Admin Dashboard)
+* **블랙홀 유저 보호:** 퇴소자 발생 시 자동 반납되지 않고 별도 목록으로 관리, 관리자가 짐 수거 확인 후 **강제 반납**.
+* **경제 밸런스 조절:** 상점의 아이템 가격을 API로 실시간 변경 가능.
+* **유저/사물함 관리:** 코인 수동 지급, 사물함 고장/복구 처리, 강제 반납, 로그타임 수정 등.
+
+### 7. 📅 캘린더 및 일정 관리 (New)
+* **일정 등록:** 관리자가 반납 마감일, 서버 점검 등 주요 일정을 등록하여 공지할 수 있습니다.
+* **월별 조회:** 사용자는 달력을 통해 월별 주요 이벤트를 한눈에 확인할 수 있습니다.
+
+### 8. 👮‍♂️ 관리자 감사 기능 강화 (Admin Audit)
+* **전체 유저 조회:** 페이징을 지원하는 전체 유저 목록 조회 API로 회원 관리 효율성을 높였습니다.
+* **반납 사진 감사:** 정상 처리된 반납 건에 대해서도 사진을 조회할 수 있어, 불시 점검 및 사물함 상태 모니터링이 가능합니다.
+
+### 9. ⚡ 이사 전용 실시간 예약 (Swap Reservation) [New]
+* **15분 선점(Ticketing):** 사용자가 이사하고 싶은 사물함을 발견하면, **이사 전용 예약**을 통해 **15분간** 해당 사물함을 선점할 수 있습니다.
+* **Redis TTL:** Redis를 활용한 만료 시간 관리로, 예약 후 15분 내에 이사를 완료하지 않으면 예약이 자동 취소되어 다른 사용자가 이용 가능해집니다.
+
+### 10. 🍉 수박씨 강화 이벤트 & 독립 상점 (Watermelon Event) [New]
+* **강화 시도 및 확률 매트릭스:** 레벨별 기본 확률에 따라 0강~최대 10강까지 강화 성공/유지/하락/파괴를 롤링합니다.
+* **비료 및 방지권 기능:** 프리미엄 비료(성공확률 보정) 및 위험한 비료(성공률 대폭 상승, 단 7강 이상 사용 불가) 사용이 가능하며, 실패 페널티를 막아줄 하락 방지권 및 파괴 방지권(파괴 무효화 대신 현재 레벨에서 -2강)을 제공합니다.
+* **코인 연동 및 전용 상점:** 유저의 기존 코인 재화와 완벽히 연동되어 작동하며, 전용 상점 API(`POST /v4/watermelon-event/shop/buy`)를 통해 코인을 지급하여 아이템을 구매할 수 있습니다.
+* **3중 정렬 리더보드 최적화:** `highest_level`, `highest_level_achieved_at`, `total_attempts` 3중 정렬이 적용된 동적 리더보드 랭킹을 성능 최적화 복합 인덱스 하에 고속으로 조회합니다.
+
+### 11. 🏊 피시너 식별 & 사물함 제한 (Pisciner Identification) [New]
+* **42 API 연동 자동 식별:** OAuth 로그인 시 42 API의 `cursus_users` 배열을 분석하여 피시너 여부를 자동 판별합니다. (`cursus_id=9`만 존재하고 `cursus_id=21`이 없으면 피시너)
+* **전용 사물함 제한:** 피시너는 관리자가 `LAPISCINE` 타입으로 지정한 사물함만 대여/예약/이사 가능합니다. 일반 유저는 `LAPISCINE` 사물함을 사용할 수 없습니다.
+* **연장 차단:** 피시너는 대여 기간이 고정되어 연장권/대여권 사용이 차단됩니다.
+* **자동 전환:** 피시너가 본과정(42cursus)에 합류하면 재로그인 시 자동으로 일반 유저로 전환됩니다.
+* **관리자 일괄 변경:** 관리자가 관리 페이지에서 사물함을 선택하여 `LentType`을 `LAPISCINE`으로 일괄 변경 가능합니다. 재배포 없이 실시간으로 피시너 전용 구역을 관리합니다.
+
+<br>
+
+## 🆕 최근 추가된 기능
+
+### 12. 📌 사물함 예약 교체/취소
+* **15분 선점(TTL):** `POST /v4/lent/reservation/{visibleNum}` 으로 사물함을 Redis 기반으로 15분간 선점합니다.
+* **교체:** 이미 다른 번호를 예약 중인 상태에서 새 번호를 예약하면 기존 예약은 자동 취소되고 새 예약으로 교체됩니다. 같은 번호를 다시 예약하면 400을 반환합니다.
+* **취소:** `DELETE /v4/lent/reservation` 으로 내 예약을 직접 취소합니다. 취소할 예약이 없으면 404(`LENT_012`)를 반환합니다.
+* **원자성:** 교체·취소는 Redis Lua 스크립트로 한 번에 처리되어 동시 요청에도 예약이 항상 1건만 남습니다. 같은 사물함에 동시 예약이 몰리면 500 대신 409(`LOCK_001`)를 반환합니다.
+
+### 13. 👀 예약 노출 필드
+* `GET /v4/cabinets` 목록 응답에 `isReserved`, `isReservedByMe` 추가.
+* `GET /v4/cabinets/{id}` 상세 응답에 `isReserved`, `isReservedByMe`, `reservationRemainingSeconds` 추가.
+* `GET /v4/users/me` 응답에 `reservedVisibleNum`, `reservationRemainingSeconds` 추가.
+* 예약자의 id·이름은 어디에도 노출하지 않습니다. Redis 장애 시에도 목록/상세/내 정보 조회가 실패하지 않고 false/null 로 응답합니다.
+
+### 14. 🔰 최초 대여 여부
+* `GET /v4/users/me` 응답에 `isFirstRental`(boolean) 추가.
+* 대여 이력(`LentHistory`)이 한 건도 없으면 true, 현재 대여 중이거나 과거에 반납을 완료한 적이 있으면 false입니다. 스키마 변경 없이 기존 이력 존재 여부로만 판별합니다.
+
+<br>
+
+## 🔄 System Logic & Sequence Diagrams
+
+> 주요 비즈니스 로직의 상세 흐름입니다.
+
+### 1. 사물함 대여 (동시성 제어 적용)
 ```mermaid
 sequenceDiagram
-    actor U as 사용자
-    participant B as 백엔드
-    participant P as OAuth 제공자
-    participant D as MariaDB
-    participant R as Redis
+    autonumber
+    actor User as 👤 사용자
+    participant Controller as 🎮 LentController
+    participant UseCase as 📥 LentUseCase
+    participant Service as ⚙️ LentApplicationService
+    participant DB as 🗄️ Database
 
-    U->>B: GET /oauth2/authorization/42
-    B-->>U: 제공자 로그인 페이지로 이동
-    U->>P: 로그인과 동의
-    P-->>B: 인가 코드 전달
-    B->>P: 토큰 교환과 프로필 조회
-    B->>D: 사용자 조회 또는 가입(최초 가입 시 대여권 지급)
-    B->>R: Refresh Token 저장(14일)
-    B-->>U: access_token, refresh_token 쿠키를 내리고 프론트로 이동
-    U->>B: 이후 요청은 쿠키 또는 Authorization 헤더의 JWT 로 인증
+    User->>Controller: "대여하기" 클릭 (POST /lent)
+    activate Controller
+    Controller->>UseCase: startLent()
+    activate Service
+    
+    Note right of DB: "🔒 비관적 락 (Pessimistic Lock)<br/>동시 요청 방지"
+    Service->>DB: "SELECT ... FOR UPDATE"
+    
+    alt 🚫 이미 대여중 (FULL)
+        Service-->>Controller: 예외 발생 (LENT_FULL)
+        Controller-->>User: "400 Error (이미 대여된 사물함입니다.)"
+    else ✅ 대여 가능
+        Service->>DB: LentHistory 생성
+        Service->>DB: 사물함 상태 변경 (FULL)
+        Service-->>Controller: 대여 성공
+        Controller-->>User: "200 OK (대여 완료!)"
+    end
+    deactivate Service
+    deactivate Controller
 ```
 
-#### 사물함 대여
-
-같은 사물함에 요청이 몰려도 한 명만 성공하도록, 사물함 번호 단위의 분산 락과 데이터베이스 행 락을 함께 씁니다. 락 순서는 항상 사용자, 사물함입니다.
-
+### 2. AI 스마트 반납 (Smart Return)
 ```mermaid
 sequenceDiagram
-    actor U as 사용자
-    participant B as 백엔드
-    participant R as Redis
-    participant D as MariaDB
+    autonumber
+    actor User as 👤 사용자
+    participant Controller as 🎮 LentController
+    participant Service as ⚙️ LentApplicationService
+    participant AI as 🤖 AI Server (Python)
+    participant Azure as ☁️ Azure Blob
 
-    U->>B: POST /v4/lent/cabinets/사물함번호
-    B->>R: 사물함 번호 키로 분산 락 획득
-    Note over B,D: 하나의 트랜잭션
-    B->>R: 다른 사람의 예약이 있는지 확인
-    B->>D: 사용자 행 락, 사물함 행 락
-    B->>D: 패널티, 기존 대여, 사물함 상태, 대여권 확인
-    B->>D: 대여권 사용, 사물함 FULL, 대여 기록 저장
-    B->>R: 내 예약 정리
-    B->>R: 분산 락 해제
-    B-->>U: 대여 완료
+    User->>Controller: "반납 사진 전송 (POST /return)"
+    activate Controller
+    Controller->>Service: 반납 요청 위임
+    activate Service
+    
+    Service->>AI: 📡 이미지 청결도 분석 요청
+    activate AI
+    AI-->>Service: "✅ 분석 결과 (CLEAN / DIRTY)"
+    deactivate AI
+
+    alt ❌ 더러움 (AI 실패)
+        Service-->>Controller: 반납 거절
+        Controller-->>User: 400 Bad Request
+        Note over User, Controller: "💡 계속 실패 시 '수동 반납(사유 입력)' 요청 가능"
+    else ✅ 깨끗함
+        Service->>Azure: 📸 사진 업로드
+        activate Azure
+        Azure-->>Service: (URL 획득)
+        deactivate Azure
+
+        Service->>DB: 사물함 상태 변경 (AVAILABLE)
+        Service-->>Controller: 반납 성공
+        Controller-->>User: "200 OK (반납 완료!)"
+    end
+    deactivate Service
+    deactivate Controller
 ```
 
-#### 사물함 반납
-
-사진을 AI 서버로 검사한 뒤 통과하면 사진을 저장하고 반납을 처리합니다. 검사에 실패해도 강제 반납을 선택하면 사유를 남기고 진행합니다.
-
+### 3. 아이템 구매 및 제한 (Item Purchase)
 ```mermaid
 sequenceDiagram
-    actor U as 사용자
-    participant B as 백엔드
-    participant A as AI 서버
-    participant Z as Azure Blob
-    participant D as MariaDB
+    autonumber
+    actor User as 👤 사용자
+    participant Service as ⚙️ StoreDomainService
+    participant DB as 🗄️ Database
 
-    U->>B: POST /v4/lent/return(사진과 비밀번호 메모)
-    B->>A: POST /predict(사진 청결도 검사)
-    alt 깨끗함
-        A-->>B: 통과
-    else 깨끗하지 않음
-        A-->>B: 실패
-        B-->>U: 반납 거절(강제 반납을 선택하면 수동 반납으로 진행)
+    User->>Service: "연장권 구매 요청 (buyItem)"
+    activate Service
+    
+    Service->>DB: "🔍 1. 현재 보유 개수 확인 (Inventory Check)"
+    Service->>DB: "🔍 2. 이번 달 구매 횟수 확인 (Monthly Check)"
+    
+    alt 🚫 제한 초과 (보유 2개 or 월 2회)
+        Service-->>User: "예외 발생 (LIMIT_EXCEEDED)"
+    else ✅ 구매 가능
+        Note right of DB: "🔒 낙관적 락 (@Version)<br/>중복 구매(Double Spending) 방지"
+        Service->>DB: "💰 코인 차감 & 아이템 지급"
+        Service-->>User: 구매 성공
     end
-    B->>Z: 사진 업로드
-    Note over B,D: 하나의 트랜잭션
-    B->>D: 사용자 행 락, 사물함 행 락
-    B->>D: 연체 패널티 계산, 대여 종료, 사물함 AVAILABLE
-    B-->>U: 반납 결과(남은 일수, 연체 여부, 패널티)
+    deactivate Service
 ```
 
-#### 배치와 알림
-
-스케줄러는 ShedLock 덕분에 서버가 여러 대로 늘어도 한 곳에서만 실행됩니다. 알림과 로그타임 동기화는 Redis Streams에 일을 넣고 소비자가 처리하는 방식입니다. 슬랙 오류제보와 공지 전달은 기본값이 꺼져 있습니다.
-
+### 4. 이사권 사용 (Transaction Swap)
 ```mermaid
-flowchart LR
-    subgraph Lent["LentScheduler"]
-        L1["00:00 패널티 차감"]
-        L2["01:40 자동 연장"]
-        L3["09:00 연체 확인"]
-        L4["09:15 만료 임박 안내"]
+sequenceDiagram
+    autonumber
+    actor User as 👤 사용자
+    participant Service as ⚙️ LentApplicationService
+    participant AI as 🤖 AI Server
+    participant Azure as ☁️ Azure Blob
+    participant DB as 🗄️ Database
+
+    %% 0. 이사 예약 (선점)
+    User->>Service: "이사 예약 요청 (forSwap=true)"
+    activate Service
+    Service->>Service: Redis Key 저장 (TTL 15min)
+    Service-->>User: "200 OK (예약 완료)"
+    deactivate Service
+
+    User->>Service: "이사 요청 (사진 포함)"
+    activate Service
+    
+    %% 1. AI 검사
+    Service->>AI: 📡 청결도 분석 요청
+    activate AI
+    AI-->>Service: "✅ CLEAN"
+    deactivate AI
+
+    %% 2. 이미지 업로드
+    Service->>Azure: 📸 사진 업로드
+    activate Azure
+    Azure-->>Service: (URL 획득)
+    deactivate Azure
+
+    %% 3. 트랜잭션
+    rect rgb(240, 248, 255)
+        Note over Service, DB: 🔄 Atomic Transaction (Service)
+        Service->>DB: "1. 이사권 차감"
+        Service->>DB: "2. 기존 반납 처리 (URL 저장)"
+        Service->>DB: "3. 새 대여 생성"
     end
-    LG["LogtimeScheduler<br/>01:00 사용자별 이벤트 발행"]
 
-    L3 -->|"트랜잭션 커밋 후"| S1[("Redis Stream<br/>slack-alarm-stream")]
-    L4 -->|"트랜잭션 커밋 후"| S1
-    S1 --> C1["SlackAlarmStreamListener"]
-    C1 --> Slack["Slack DM"]
-
-    LG --> S2[("Redis Stream<br/>logtime-sync-stream")]
-    S2 --> C2["LogtimeStreamListener"]
-    C2 --> FT["42 API<br/>로그타임 조회"]
-    C2 --> Reward["로그타임 반영과 대여권 지급(지급일)"]
-
-    RF["오류제보 포워더(선택)<br/>60초마다 채널 확인"] --> AdminDM["관리자 DM"]
-    NF["공지 포워더(선택)<br/>60초마다 채널 확인"] --> Kakao["동의한 사용자에게 카카오톡"]
+    alt 🚫 실패 시 (AI/DB Error)
+        Service->>DB: Rollback
+        Service-->>User: 에러 응답
+    else ✅ 성공 시 (Commit)
+        Service->>DB: Commit
+        Service-->>User: "200 OK (이사 완료)"
+    end
+    deactivate Service
 ```
 
-## 2. 실행 환경 및 필요한 도구와 버전
+### 5. 캘린더 일정 관리 (Calendar Management)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as 👮‍♂️ 관리자
+    actor User as 👤 사용자
+    participant Controller as 🎮 CalendarController
+    participant Service as ⚙️ CalendarDomainService
+    participant DB as 🗄️ Database
 
-| 도구 | 버전 | 비고 |
-| --- | --- | --- |
-| JDK | 17 | 빌드에 필요합니다. Gradle 툴체인이 17을 요구합니다. |
-| Gradle | 8.14.3 | 저장소의 `./gradlew`가 받아서 쓰므로 따로 설치하지 않습니다. |
-| Spring Boot | 3.5.8 | |
-| Docker Engine | 29.6.2에서 확인 | |
-| Docker Compose | v2 이상 (5.3.1에서 확인) | `docker compose` 명령을 씁니다. |
-| MariaDB | 10.6 | compose가 컨테이너로 실행합니다. |
-| Redis | `redis:alpine` (8.10.2에서 확인) | compose가 컨테이너로 실행합니다. |
-| Nginx | `nginx:latest` (1.31.7에서 확인) | |
-| Prometheus, Grafana | `latest` 태그 (3.15.0, 13.2.4에서 확인) | |
-| AI 서버 | `ghcr.io/42-gy/ft_cabinet_ai` 이미지 | Python FastAPI입니다. 이미지가 비공개라 접근 권한이 있어야 받을 수 있습니다. Python 버전은 이 저장소에서 확인할 수 없습니다. |
-| Python 3 | 선택 | `scripts/` 아래 보조 스크립트에만 필요하고 서비스 실행과는 무관합니다. |
+    %% 관리자 일정 등록
+    Admin->>Controller: "일정 등록 (POST /admin/calendar)"
+    activate Controller
+    Controller->>Service: createEvent()
+    activate Service
+    Service->>DB: "일정 저장 (INSERT)"
+    Service-->>Controller: 등록 성공
+    Controller-->>Admin: "200 OK (일정 추가됨)"
+    deactivate Service
+    deactivate Controller
 
-`latest` 태그는 받는 시점에 따라 버전이 달라질 수 있습니다. 실행 중에는 호스트의 80, 3000, 13306, 6379 포트를 씁니다.
-
-JDK 17은 Ubuntu에서 `sudo apt install openjdk-17-jdk`로 설치할 수 있습니다.
-
-## 3. 설치 방법 및 실행 방법
-
-이 저장소는 BE와 AI가 하나로 합쳐진 모노레포입니다. 전체 스택 실행 방법은 저장소 루트의 [README.md](../README.md)를 따릅니다. 루트 Makefile, 루트 `docker-compose.yml`, 루트 `.env.example`을 씁니다(이 폴더 안에는 더 이상 별도의 Makefile, compose 파일, `.env.example`이 없습니다).
-
-```bash
-# 저장소 루트에서
-make up
-make seed
-make check
+    %% 사용자 일정 조회
+    User->>Controller: "달력 조회 (GET /calendar)"
+    activate Controller
+    Controller->>Service: getEvents(month)
+    activate Service
+    Service->>DB: "일정 목록 조회 (SELECT)"
+    Service-->>Controller: "이벤트 리스트 반환"
+    Controller-->>User: "200 OK (달력 데이터)"
+    deactivate Service
+    deactivate Controller
 ```
 
-`make help`로 대상 목록을 볼 수 있습니다. 종료는 `make down`, 데이터까지 지우려면 `make reset`, 테스트는 `make test`입니다. AI 서버는 이제 비공개 이미지가 아니라 `ai/` 소스에서 직접 빌드하므로 기본적으로 함께 뜹니다.
+### 6. 수박씨 강화 및 방지권 보정 (Watermelon Enhancement)
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as 👤 사용자
+    participant Controller as 🎮 WatermelonEventController
+    participant Service as ⚙️ WatermelonEventService
+    participant Watermelon as 🍉 Watermelon (Domain)
+    participant UserEntity as 👤 User (Domain)
+    participant DB as 🗄️ Database
 
-사물함 목록이 비어 있으므로 가짜 데이터로 된 시드를 넣습니다(`make seed`가 내부적으로 실행하는 내용과 같습니다).
+    User->>Controller: 강화 시도 (POST /enhance)
+    activate Controller
+    Controller->>Service: enhance(userId, options)
+    activate Service
 
-```bash
-docker exec -i cabi_db mariadb -uyour_db_user -pyour_db_password cabi < backend/scripts/db/seed/demo-seed.sql
+    Service->>DB: User & Watermelon 조회 (Pessimistic Lock 적용)
+    DB-->>Service: User & Watermelon 반환
+
+    Service->>UserEntity: useCoin(enhancementCost)
+    UserEntity-->>Service: 코인 선차감 완료
+
+    Service->>Watermelon: useFertilizer(fertilizerType)
+    Watermelon-->>Service: 비료 선차감 완료 (인벤토리 -1)
+
+    Service->>Service: 주사위 롤링 (rawOutcome 도출)
+
+    alt 결과가 하락(DROP) 혹은 파괴(DESTROY) 이고 방지권 사용 활성화된 경우
+        Service->>Watermelon: applyEnhancement(rawResult, useDropProj, useDestroyProj)
+        Note over Watermelon: 방지권 보유량 확인 후<br/>결과 보정 (유지 혹은 -2강)<br/>및 방지권 차감 (-1)
+    else 그 외 (성공/유지 혹은 방지권 미사용/부족)
+        Service->>Watermelon: applyEnhancement(rawResult, false, false)
+    end
+
+    Service->>DB: User & Watermelon 상태 영속화 (Save)
+    Service->>DB: WatermelonEventLog 적재
+
+    Service-->>Controller: 결과 반환 (WatermelonEnhanceResult)
+    deactivate Service
+    Controller-->>User: ApiResponse<EnhanceResponse>
+    deactivate Controller
 ```
 
-시드에는 2~4층 사물함 90개와 `demo-admin`(관리자), `demo-user-01`, `demo-user-02`, `demo-piscine-01` 사용자가 들어 있습니다. 이 사용자들로 로그인할 수는 없습니다.
+<br>
 
-종료와 초기화는 다음과 같습니다(저장소 루트에서).
+## 🧪 API Specification (전체 API 목록)
 
-```bash
-make down
-make reset   # 컨테이너와 db_data, redis_data 까지 모두 삭제
-```
+### 1. 🔐 인증 (Auth)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/oauth2/authorization/42` | 42 Intra 로그인 (OAuth2) |
+| `POST` | `/v4/auth/reissue` | Access Token 재발급 |
+| `POST` | `/v4/auth/logout` | 로그아웃 (Refresh Token 삭제) |
+| `POST` | `/v4/auth/link/{provider}` | 카카오/구글 소셜 계정 연동 |
 
-### Gradle로 직접 실행
+### 2. 👤 유저 (User)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/users/me` | 내 정보 (현재 대여, 연체, 코인, **[NEW] 재화/아이템 사용 이력 포함**) 조회 |
+| `POST` | `/v4/users/attendance` | **[NEW]** 수동 출석 체크 (코인 획득) |
+| `GET` | `/v4/users/attendance` | 이번 달 출석 현황 조회 |
 
-데이터베이스와 Redis만 compose로 띄우고 백엔드만 호스트에서 실행하려면 저장소 루트의 `make run`을 씁니다. 직접 하려면 저장소 루트에서:
+### 3. 📦 사물함 조회 (Cabinet)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/cabinets` | 건물/층별 사물함 배치도 및 상태 조회 |
+| `GET` | `/v4/cabinets/status-summary` | 층별 잔여 좌석 요약 정보 |
+| `GET` | `/v4/cabinets/status-summary/all` | 전체 건물/층 잔여 좌석 요약 정보 |
+| `GET` | `/v4/cabinets/{cabinetId}` | 사물함 상세 정보 (공유 사물함 인원 등) |
 
-```bash
-cp .env.example .env
-docker compose up -d mariadb redis
-set -a; source .env; set +a
-DB_HOST=127.0.0.1 DB_PORT=13306 REDIS_ALLOW_INSECURE=true \
-SPRING_DATASOURCE_URL='jdbc:mariadb://127.0.0.1:13306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false' \
-SPRING_CLOUD_AZURE_STORAGE_BLOB_CONNECTION_STRING="$AZURE_STORAGE_CONNECTION_STRING" \
-backend/gradlew -p backend bootRun
-```
+### 4. 🔑 대여 및 반납 (Lent)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `POST` | `/v4/lent/cabinets/{visibleNum}` | 사물함 대여 시작 |
+| `POST` | `/v4/lent/reservation/{visibleNum}` | **[NEW]** 사물함 예약 (15분 선점, 대여 중이면 이사 예약으로 자동 처리) |
+| `DELETE` | `/v4/lent/reservation` | **[NEW]** 내 예약 취소 |
+| `POST` | `/v4/lent/check-image` | **[AI]** 반납 사진 사전 검증 (AI 청결도 검사만 선실행) |
+| `POST` | `/v4/lent/return` | **[AI/Manual]** 반납 (forceReturn=true 시 강제 반납/사유 입력) |
+| `POST` | `/v4/lent/swap/{newVisibleNum}` | **[Item]** 이사권을 사용해 사물함 이동 |
+| `POST` | `/v4/lent/extension` | **[Item]** 연장권을 사용해 기간 연장 |
+| `POST` | `/v4/lent/renew` | **[Ticket]** 대여권을 새로 사용하여 기간 연장 (31일) |
+| `PATCH` | `/v4/lent/extension/auto` | **[NEW]** 자동 연장 설정 ON/OFF 토글 |
+| `POST` | `/v4/lent/penalty-exemption` | **[Item]** 패널티 감면권 사용 |
 
-로컬 MariaDB는 TLS가 꺼져 있어서 JDBC URL을 `useSSL=false`로 직접 지정합니다. 이 경우 애플리케이션 주소는 `http://localhost:8080`입니다.
+### 5. 🏪 상점 (Store)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/store/items` | 구매 가능한 아이템 목록 및 가격 조회 |
+| `POST` | `/v4/store/buy/{itemId}` | 아이템 구매 (코인 차감) |
 
-### 테스트
+> **구매 API Error Codes:**
+> * `EXTENSION_ITEM_LIMIT_EXCEEDED`: 연장권은 최대 **5개**까지만 보유 가능.
+> * `EXTENSION_ITEM_PURCHASE_LIMIT_EXCEEDED`: 연장권은 매월 최대 **5회**만 구매 가능.
 
-```bash
-./gradlew clean test
-```
+### 6. 📅 캘린더 (Calendar) [New]
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/calendar/events` | 월별 일정 목록 조회 |
 
-일부 테스트는 Docker로 MariaDB, MySQL, Redis 컨테이너를 띄우므로 Docker가 실행 중이어야 합니다. Docker가 없으면 해당 테스트는 건너뜁니다.
+### 7. 🍉 수박씨 강화 이벤트 (Watermelon Event) [New]
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/watermelon-event/me` | 내 강화 상태, 인벤토리, 랭킹 정보 조회 |
+| `POST` | `/v4/watermelon-event/enhance` | 수박씨앗 강화 시도 |
+| `POST` | `/v4/watermelon-event/shop/buy` | 이벤트 전용 상점 아이템 구매 |
+| `GET` | `/v4/watermelon-event/rankings` | 전역 리더보드 랭킹 페이징 조회 |
+| `GET` | `/v4/watermelon-event/logs` | 내 강화 히스토리 로그 목록 조회 |
+| `GET` | `/v4/watermelon-event/config` | 이벤트 설정 정보 (비용, 확률, 아이템 가격) 조회 |
 
-## 4. 환경 변수 설정 방법
+### 8. 🛡️ 관리자 (Admin)
+| Method | URI | 설명 |
+| :--- | :--- | :--- |
+| `GET` | `/v4/admin/dashboard` | 전체 통계 대시보드 |
+| `GET` | `/v4/admin/users` | **[NEW]** 전체 유저 목록 조회 (페이징) |
+| `GET` | `/v4/admin/users/{name}` | 특정 유저 정보 및 대여 이력 검색 |
+| `POST` | `/v4/admin/users/{name}/coin` | 유저에게 코인 수동 지급 |
+| `DELETE` | `/v4/admin/users/{name}/coin` | 유저 코인 수동 회수 |
+| `PATCH` | `/v4/admin/users/{name}/logtime` | 유저 로그타임 수동 수정 |
+| `POST` | `/v4/admin/users/{name}/penalty` | 유저에게 패널티 수동 부여 |
+| `DELETE` | `/v4/admin/users/{name}/penalty` | 유저 패널티 해제 (감면) |
+| `GET` | `/v4/admin/users/penalty` | 패널티 보유 유저 목록 조회 |
+| `POST` | `/v4/admin/users/{name}/items` | 유저에게 아이템 수동 지급 |
+| `DELETE` | `/v4/admin/users/{name}/items` | 유저 미사용 아이템 전체 회수 |
+| `POST` | `/v4/admin/users/{name}/role/admin` | 유저를 관리자로 승급 |
+| `DELETE` | `/v4/admin/users/{name}/role/admin` | 관리자 권한 해제 |
+| `PATCH` | `/v4/admin/cabinets/{visibleNum}` | 사물함 상태(고장 등) 변경 |
+| `PATCH` | `/v4/admin/cabinets/bundle/status` | **[NEW]** 사물함 상태/LentType 일괄 변경 (피시너 전용 구역 설정) |
+| `POST` | `/v4/admin/cabinets/{visibleNum}/force-return` | 관리자 권한 강제 반납 |
+| `GET` | `/v4/admin/cabinets/pending` | 수동 반납 승인 대기 목록 조회 |
+| `GET` | `/v4/admin/returns/photos` | **[NEW]** 반납 완료된 사물함 사진 조회 (Audit) |
+| `POST` | `/v4/admin/cabinets/{visibleNum}/approve` | 수동 반납 최종 승인 (잠금 해제) |
+| `PATCH` | `/v4/admin/items/{itemName}/price` | 상점 아이템 가격 변경 |
+| `POST` | `/v4/admin/alarm/emergency` | 전체 유저 긴급 공지(DM) 발송 |
+| `GET` | `/v4/admin/cabinets/overdue` | 현재 연체 중인 유저 목록 조회 |
+| `GET` | `/v4/admin/cabinets/broken` | 고장 사물함 목록 조회 |
+| `GET` | `/v4/admin/cabinets/{visibleNum}` | 사물함 상세 정보 조회 |
+| `GET` | `/v4/admin/cabinets/{visibleNum}/history` | 사물함 대여 이력 조회 (페이징) |
+| `GET` | `/v4/admin/stats/weekly` | 주간 통계 요약 |
+| `GET` | `/v4/admin/stats/floors` | 층별 사물함 현황 통계 |
+| `GET` | `/v4/admin/stats/coins` | 주간 코인 흐름 통계 (지급/사용) |
+| `GET` | `/v4/admin/stats/items` | 아이템 사용 통계 + 출석/수박씨 집계 |
+| `GET` | `/v4/admin/stats/store` | 상점 판매 통계 |
+| `GET` | `/v4/admin/stats/attendance` | 기간별 출석 통계 조회 |
+| `POST` | `/v4/admin/calendar/events` | **[NEW]** 일정 등록 |
+| `PUT` | `/v4/admin/calendar/events/{id}` | **[NEW]** 일정 수정 |
+| `DELETE` | `/v4/admin/calendar/events/{id}` | **[NEW]** 일정 삭제 |
+| `GET` | `/v4/admin/banned-users` | **[NEW]** 블랙리스트 유저 목록 조회 |
+| `POST` | `/v4/admin/banned-users` | **[NEW]** 블랙리스트 유저 등록 (intraId로 차단) |
+| `DELETE` | `/v4/admin/banned-users/{intraId}` | **[NEW]** 블랙리스트 유저 해제 |
 
-저장소 루트의 `.env.example`을 `.env`로 복사해서 값을 채웁니다. `.env`는 git에 올라가지 않습니다. docker compose는 같은 디렉터리의 `.env`를 자동으로 읽습니다.
+> **블랙리스트 API:**
+> * **차단 방식:** `intraId` (42 로그인 이름)로 차단. 차단된 유저가 로그인 시도 시 OAuth 에러 발생.
+> * 요청 예시 (등록): `{ "intraId": "username", "reason": "차단 사유" }`
 
-```bash
-cp .env.example .env
-```
+<br>
 
-`.env.example`에서 줄 앞에 `#`이 붙은 변수는 선택이며, 적힌 값이 기본값입니다. 아래 변수는 필수입니다.
+## ⚙️ Setup & Run
 
-| 변수 | 설명 | 예시 형식 |
-| --- | --- | --- |
-| `DB_USER` | 데이터베이스 사용자 | `cabi` |
-| `DB_PASSWORD` | 데이터베이스 비밀번호 | 임의 문자열 |
-| `DB_ROOT_PASSWORD` | compose의 MariaDB root 비밀번호 | 임의 문자열 |
-| `FLYWAY_ENABLED` | 비어 있는 DB에 스키마를 만들려면 `true` | `true` |
-| `REDIS_PORT` | compose가 호스트에 여는 Redis 포트 | `6379` |
-| `JWT_SECRET` | JWT 서명 키입니다. 32바이트 이상이어야 합니다. | `openssl rand -base64 48` 결과 |
-| `FT_CLIENT_ID`, `FT_CLIENT_SECRET` | 42 OAuth 앱 | 42 intra에서 발급 |
-| `KAKAO_CLIENT_ID`, `KAKAO_CLIENT_SECRET` | 카카오 OAuth 앱 | 카카오 디벨로퍼스에서 발급 |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | 구글 OAuth 앱 | 구글 클라우드 콘솔에서 발급 |
-| `FRONTEND_URL` | OAuth 로그인 후 돌아올 주소입니다. `https`이거나 localhost여야 하고 끝에 `/`를 붙이지 않습니다. | `http://localhost` |
-| `SLACK_BOT_TOKEN` | 슬랙 봇 토큰 | `xoxb-...` |
-| `AZURE_STORAGE_CONNECTION_STRING` | 반납 사진을 올리는 Azure Blob Storage 연결 문자열입니다. 값에 `;`가 있어 따옴표로 감쌉니다. | `"DefaultEndpointsProtocol=https;AccountName=...;AccountKey=...;EndpointSuffix=core.windows.net"` |
-| `AI_MODEL_PATH` | AI 서버가 쓸 모델 파일 경로 (AI 서버 이미지 기준) | 이미지에 맞는 경로 |
+실행은 이 레포 루트([README.md](../README.md))의 절차를 따릅니다: 루트에서 `.env.example`을 `.env`로 복사하고 `make up`(backend 빌드 → 전체 컨테이너 기동), `make seed`(사물함 304개 시드) 순서로 진행합니다. backend 폴더만 따로 실행하지 않습니다.
 
-OAuth 앱의 redirect URI는 `{FRONTEND_URL}/login/oauth2/code/42`, `{FRONTEND_URL}/login/oauth2/code/kakao`, `{FRONTEND_URL}/login/oauth2/code/google`로 등록합니다.
+운영 배포(Azure)는 이 제출물과는 별개입니다.
 
-슬랙 알림 전달, Gemini 공지 요약, FAQ 챗봇 같은 선택 기능은 모두 기본값이 꺼짐입니다. 켜는 변수는 `.env.example`에 설명과 함께 들어 있습니다.
+### 1. 접속 정보
+* **메인 서비스:** `http://localhost` (Port 80, Nginx)
+* **Grafana:** `http://localhost:3000` (계정: admin / admin)
+* **Prometheus:** 호스트에는 노출되지 않고 컨테이너 내부 네트워크에서만 접근됩니다(Grafana가 내부적으로 조회).
 
-## 5. 접속 및 확인 방법
+### 2. 테스트 계정 정보 (Test Accounts)
+`data.sql`을 통해 초기 데이터가 로드됩니다. 관리자 권한이 필요한 경우 DB에서 직접 `role`을 `ADMIN`으로 변경하거나 초기 데이터를 확인하세요.
 
-Docker Compose로 실행했을 때의 로컬 주소는 다음과 같습니다. 백엔드는 Nginx(80)를 거쳐 접근합니다.
+> **Tip:** 로그인 후 `/v4/admin/users/{your_intra_id}/coin` API를 통해 코인을 추가로 지급받아 상점 기능을 테스트해볼 수 있습니다.
 
-| 대상 | 주소 |
-| --- | --- |
-| API 서버 | `http://localhost` |
-| Swagger UI | `http://localhost/swagger-ui/index.html` |
-| OpenAPI 문서 | `http://localhost/v3/api-docs` |
-| Grafana | `http://localhost:3000` (처음 로그인 계정은 `admin` / `admin`) |
-| MariaDB | `localhost:13306` |
-| Redis | `localhost:6379` |
-
-Prometheus는 compose 네트워크 안에서만 열려 있고 호스트 포트는 없습니다. Gradle로 직접 실행했다면 API 서버 주소는 `http://localhost:8080`입니다.
-
-시드를 넣은 뒤 로그인 없이 확인할 수 있는 호출은 다음과 같습니다.
-
-```bash
-curl http://localhost/v4/cabinets/status-summary/all
-curl "http://localhost/v4/cabinets?floor=2"
-curl http://localhost/v4/cabinets/1
-```
-
-첫 호출은 `totalCounts`가 90인 JSON을 돌려주고, 두 번째는 2층 사물함 30개를 돌려줍니다. 사물함 응답에는 예약 여부(`isReserved`, `isReservedByMe`)가 들어 있습니다.
-
-`/actuator/health`는 관리자 권한이 필요해서 로그인하지 않으면 확인할 수 없습니다. Nginx도 `/actuator` 경로를 막아 둡니다. 서버가 떠 있는지는 위 `curl` 호출이 200을 돌려주는지, `docker compose ps`에서 `cabi_backend`가 `Up`인지로 확인합니다.
-
-로그인은 42, 카카오, 구글 OAuth로만 할 수 있습니다. 개발용 로그인이나 테스트 계정은 구현되어 있지 않습니다. 로컬에서 로그인하려면 각 서비스에서 OAuth 앱을 만들어 `.env`에 넣고 redirect URI를 위와 같이 등록한 뒤, 브라우저에서 `http://localhost/oauth2/authorization/42`(카카오는 `kakao`, 구글은 `google`)로 들어갑니다. 시드의 `demo-*` 사용자는 DB에만 있는 데이터입니다. 본인 인트라 ID로 가입한 뒤 DB에서 `role`을 `ADMIN`으로 바꾸면 관리자 API를 쓸 수 있습니다.
-
-배포 주소: (제출 시 기재)
+### 3. 주요 테스트 시나리오
+1. **대여/반납:** 메인 화면에서 사물함 선택 -> 대여 -> 내 정보 -> 반납 (사진 업로드)
+2. **자동 연장:** 상점에서 `연장권` 구매 -> `/v4/lent/extension/auto` API로 자동 연장 ON 설청 -> (DB에서 만료일 조작하여 테스트 close)
+3. **관리자 모드:** URL에 `/admin/login` 접근 -> (Admin 계정 필요) -> 대시보드 확인

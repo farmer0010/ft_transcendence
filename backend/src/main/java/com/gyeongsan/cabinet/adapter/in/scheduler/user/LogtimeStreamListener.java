@@ -4,8 +4,6 @@ import com.gyeongsan.cabinet.config.RedisStreamConfig;
 import com.gyeongsan.cabinet.domain.item.model.Item;
 import com.gyeongsan.cabinet.domain.item.port.out.ItemRepositoryPort;
 import com.gyeongsan.cabinet.domain.lent.port.out.FtApiPort;
-import com.gyeongsan.cabinet.domain.user.model.FtGradeResolver;
-import com.gyeongsan.cabinet.domain.user.model.FtGradeSnapshot;
 import com.gyeongsan.cabinet.domain.user.port.in.UserUseCase;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -50,9 +48,6 @@ public class LogtimeStreamListener
             if (totalMinutes < 0) {
                 log.warn("⚠️ [Consumer] {} 로그타임 API 호출 실패. 기존 학습시간을 유지하고 건너뜁니다.", intraId);
             } else {
-                if (isPayDay) {
-                    refreshGradeIfNeeded(userId, intraId, totalMinutes);
-                }
                 userUseCase.processLogtimeTransaction(userId, rewardItem, totalMinutes, isPayDay);
             }
 
@@ -69,6 +64,7 @@ public class LogtimeStreamListener
         } catch (Exception e) {
             log.error("🚨 [Consumer] 로그타임 동기화 중 에러 발생 (ACK 처리 후 무시): {}", e.getMessage(), e);
             try {
+                // 예외 발생 시에도 Pending에 계속 남지 않도록 ACK 처리 (일종의 자동 버리기)
                 redisTemplate
                         .opsForStream()
                         .acknowledge(RedisStreamConfig.CONSUMER_GROUP_NAME, message);
@@ -76,22 +72,6 @@ public class LogtimeStreamListener
             } catch (Exception ackEx) {
                 log.error("🚨 [Consumer] ACK 처리 중 추가 에러 발생: {}", ackEx.getMessage());
             }
-        }
-    }
-
-    private void refreshGradeIfNeeded(Long userId, String intraId, int totalMinutes) {
-        try {
-            if (!userUseCase.needsGradeRefresh(userId, totalMinutes)) {
-                return;
-            }
-            FtGradeSnapshot snapshot = FtGradeResolver.resolve(ftApiPort.getCursusEntries(intraId));
-            if (!snapshot.parsed()) {
-                log.warn("⚠️ [Consumer] {} grade 재조회 실패. 저장된 값을 유지합니다.", intraId);
-                return;
-            }
-            userUseCase.updateFtGrade(userId, snapshot);
-        } catch (Exception e) {
-            log.warn("⚠️ [Consumer] {} grade 재조회 중 오류. 저장된 값을 유지합니다: {}", intraId, e.getMessage());
         }
     }
 }

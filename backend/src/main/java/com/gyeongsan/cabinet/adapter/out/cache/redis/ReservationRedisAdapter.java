@@ -95,7 +95,7 @@ public class ReservationRedisAdapter implements ReservationPort {
 
     @Override
     public Optional<Long> getReservedUserId(Integer visibleNum) {
-        String value = redisTemplate.opsForValue().get(CABINET_KEY_PREFIX + visibleNum);
+        String value = redisTemplate.opsForValue().get(cabinetKey(visibleNum));
         return value != null ? Optional.of(Long.valueOf(value)) : Optional.empty();
     }
 

@@ -11,7 +11,7 @@ help:
 	@echo "  env       .env 가 없으면 .env.example 을 복사해서 만든다"
 	@echo "  build     backend jar 를 빌드한다 (테스트 제외)"
 	@echo "  up        빌드 후 docker compose 로 전체 스택을 띄우고 기동을 기다린다"
-	@echo "  seed      가짜 데이터 시드(사물함 90개, 데모 사용자)를 DB 에 넣는다"
+	@echo "  seed      사물함 시드(304개)를 DB 에 넣는다"
 	@echo "  check     로그인 없이 호출할 수 있는 API 로 응답을 확인한다"
 	@echo "  check-ai  AI 서버 /health 로 응답을 확인한다"
 	@echo "  logs      백엔드 로그를 따라 본다"
@@ -42,7 +42,7 @@ up: build
 
 seed: env
 	@set -a; . ./.env; set +a; \
-	docker exec -i cabi_db mariadb -u"$$DB_USER" -p"$$DB_PASSWORD" cabi < backend/scripts/db/seed/demo-seed.sql \
+	docker exec -i cabi_db mariadb -u"$$DB_USER" -p"$$DB_PASSWORD" < backend/init_data.sql \
 	&& echo "시드를 넣었습니다."
 
 check:

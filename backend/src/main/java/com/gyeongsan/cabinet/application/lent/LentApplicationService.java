@@ -9,7 +9,6 @@ import com.gyeongsan.cabinet.domain.item.model.ItemHistory;
 import com.gyeongsan.cabinet.domain.item.model.ItemType;
 import com.gyeongsan.cabinet.domain.item.port.out.ItemHistoryRepositoryPort;
 import com.gyeongsan.cabinet.domain.lent.model.LentHistory;
-import com.gyeongsan.cabinet.domain.lent.model.LentReturnResult;
 import com.gyeongsan.cabinet.domain.lent.model.ReservationOutcome;
 import com.gyeongsan.cabinet.domain.lent.port.in.LentUseCase;
 import com.gyeongsan.cabinet.domain.lent.port.out.AiCheckPort;
@@ -22,8 +21,6 @@ import com.gyeongsan.cabinet.global.exception.ErrorCode;
 import com.gyeongsan.cabinet.global.exception.ServiceException;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,8 +45,6 @@ public class LentApplicationService implements LentUseCase {
 
     private static final long RESERVATION_TTL_MINUTES = 15;
 
-    private static final int MAX_RETURN_LOCK_ATTEMPTS = 3;
-
     @Value("${cabinet.policy.lent-term}")
     private int lentTerm;
 
@@ -64,7 +59,10 @@ public class LentApplicationService implements LentUseCase {
 
         checkCabinetReservation(visibleNum, userId);
 
-        User user = lockUser(userId);
+        User user =
+                userRepository
+                        .findById(userId)
+                        .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getPenaltyDays() > 0) {
             throw new ServiceException(ErrorCode.PENALTY_USER);
@@ -119,17 +117,13 @@ public class LentApplicationService implements LentUseCase {
     }
 
     @Override
-    public LentReturnResult endLent(
+    public void endLent(
             Long userId,
             String previousPassword,
             MultipartFile file,
             Boolean forceReturn,
             String reason) {
-        log.info(
-                "AI 반납 시도 - User: {}, Force: {}, 사유 작성: {}",
-                userId,
-                forceReturn,
-                reason != null && !reason.isBlank());
+        log.info("AI 반납 시도 - User: {}, Force: {}, Reason: {}", userId, forceReturn, reason);
 
         boolean isAiSuccess = false;
         try {
@@ -148,63 +142,22 @@ public class LentApplicationService implements LentUseCase {
         boolean doManualReturn = !isAiSuccess && forceReturn;
         String photoUrl = imageUploadPort.uploadImage(userId, file);
 
-        return returnWithLocks(
-                userId,
-                () -> {
+        transactionTemplate.execute(
+                status -> {
                     if (doManualReturn) {
                         String returnReason =
                                 (reason != null && !reason.isBlank())
                                         ? "[User Force] " + reason
                                         : "AI 검사 실패 및 강제 반납";
-                        return endLentManual(userId, previousPassword, returnReason, photoUrl);
+                        endLentManual(userId, previousPassword, returnReason, photoUrl);
+                    } else {
+                        processReturnTransaction(userId, previousPassword, photoUrl);
                     }
-                    return processReturnTransaction(userId, previousPassword, photoUrl);
+                    return null;
                 });
     }
 
-    private LentReturnResult returnWithLocks(Long userId, Supplier<LentReturnResult> body) {
-        for (int attempt = 0; attempt < MAX_RETURN_LOCK_ATTEMPTS; attempt++) {
-            Long cabinetId =
-                    lentRepository
-                            .findActiveCabinetIdByUserId(userId)
-                            .orElseThrow(() -> new ServiceException(ErrorCode.LENT_NOT_FOUND));
-            try {
-                return transactionTemplate.execute(
-                        status -> {
-                            lockUser(userId);
-                            cabinetRepository
-                                    .findByIdWithLock(cabinetId)
-                                    .orElseThrow(
-                                            () ->
-                                                    new ServiceException(
-                                                            ErrorCode.CABINET_NOT_FOUND));
-
-                            Long lockedCabinetId =
-                                    lentRepository
-                                            .findActiveCabinetIdByUserId(userId)
-                                            .orElseThrow(
-                                                    () ->
-                                                            new ServiceException(
-                                                                    ErrorCode.LENT_NOT_FOUND));
-                            if (!lockedCabinetId.equals(cabinetId)) {
-                                throw new ReturnTargetChangedException();
-                            }
-                            return body.get();
-                        });
-            } catch (ReturnTargetChangedException e) {
-                log.info("반납 대상 사물함이 바뀌어 다시 시도합니다 - User: {}", userId);
-            }
-        }
-        throw new ServiceException(ErrorCode.REQUEST_IN_PROGRESS);
-    }
-
-    private static final class ReturnTargetChangedException extends RuntimeException {
-        ReturnTargetChangedException() {
-            super(null, null, false, false);
-        }
-    }
-
-    public LentReturnResult endLentManual(
+    public void endLentManual(
             Long userId, String previousPassword, String reason, String photoUrl) {
         LentHistory lentHistory =
                 lentRepository
@@ -212,34 +165,28 @@ public class LentApplicationService implements LentUseCase {
                         .orElseThrow(() -> new ServiceException(ErrorCode.LENT_NOT_FOUND));
 
         User user = lentHistory.getUser();
-        LocalDateTime now = LocalDateTime.now();
-        LentReturnResult result =
-                buildReturnResult(lentHistory, checkAndApplyPenalty(user, lentHistory, now), now);
+        checkAndApplyPenalty(user, lentHistory);
 
-        lentHistory.endLent(now, previousPassword);
+        lentHistory.endLent(LocalDateTime.now(), previousPassword);
         lentHistory.attachReturnPhoto(photoUrl);
 
         Cabinet cabinet = lentHistory.getCabinet();
         cabinet.updateStatus(CabinetStatus.PENDING);
         cabinet.updateStatusNote(reason);
-        return result;
     }
 
-    protected LentReturnResult processReturnTransaction(
-            Long userId, String previousPassword, String photoUrl) {
+    protected void processReturnTransaction(Long userId, String previousPassword, String photoUrl) {
         LentHistory lentHistory =
                 lentRepository
                         .findByUserIdAndEndedAtIsNull(userId)
                         .orElseThrow(() -> new ServiceException(ErrorCode.LENT_NOT_FOUND));
 
         User user = lentHistory.getUser();
-        LocalDateTime now = LocalDateTime.now();
-        LentReturnResult result =
-                buildReturnResult(lentHistory, checkAndApplyPenalty(user, lentHistory, now), now);
+        checkAndApplyPenalty(user, lentHistory);
 
         Cabinet cabinet = lentHistory.getCabinet();
 
-        lentHistory.endLent(now, previousPassword);
+        lentHistory.endLent(LocalDateTime.now(), previousPassword);
         lentHistory.attachReturnPhoto(photoUrl);
 
         if (cabinet.getStatus() == CabinetStatus.FULL
@@ -248,7 +195,6 @@ public class LentApplicationService implements LentUseCase {
         }
 
         log.info("반납 성공! 대여 ID: {}, 사물함: {}", lentHistory.getId(), cabinet.getVisibleNum());
-        return result;
     }
 
     @Override
@@ -293,7 +239,10 @@ public class LentApplicationService implements LentUseCase {
     public void manualRenew(Long userId) {
         log.info("수동 연장(대여권 사용) 시도 - User: {}", userId);
 
-        User user = lockUser(userId);
+        User user =
+                userRepository
+                        .findById(userId)
+                        .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getPenaltyDays() > 0) {
             throw new ServiceException(ErrorCode.PENALTY_USER);
@@ -353,65 +302,14 @@ public class LentApplicationService implements LentUseCase {
 
         String photoUrl = imageUploadPort.uploadImage(userId, file);
 
-        swapWithLocks(
-                userId,
-                newVisibleNum,
-                lockedNewCabinet ->
-                        doSwap(
-                                userId,
-                                newVisibleNum,
-                                previousPassword,
-                                forceReturn,
-                                reason,
-                                photoUrl,
-                                lockedNewCabinet));
-    }
+        checkCabinetReservation(newVisibleNum, userId);
 
-    private void swapWithLocks(Long userId, Integer newVisibleNum, Consumer<Cabinet> body) {
-        for (int attempt = 0; attempt < MAX_RETURN_LOCK_ATTEMPTS; attempt++) {
-            Long oldCabinetId = lentRepository.findActiveCabinetIdByUserId(userId).orElse(null);
-            Long newCabinetId = cabinetRepository.findIdByVisibleNum(newVisibleNum).orElse(null);
-            try {
-                transactionTemplate.execute(
-                        status -> {
-                            lockUser(userId);
-                            Cabinet lockedNewCabinet = null;
-                            if (oldCabinetId != null && newCabinetId != null) {
-                                lockedNewCabinet =
-                                        lockCabinetsInIdOrder(oldCabinetId, newCabinetId);
-                                Long lockedOldCabinetId =
-                                        lentRepository
-                                                .findActiveCabinetIdByUserId(userId)
-                                                .orElse(null);
-                                if (!oldCabinetId.equals(lockedOldCabinetId)
-                                        || !newVisibleNum.equals(
-                                                lockedNewCabinet.getVisibleNum())) {
-                                    throw new ReturnTargetChangedException();
-                                }
-                            }
-                            body.accept(lockedNewCabinet);
-                            return null;
-                        });
-                return;
-            } catch (ReturnTargetChangedException e) {
-                log.info("이사 대상 사물함이 바뀌어 다시 시도합니다 - User: {}", userId);
-            }
-        }
-        throw new ServiceException(ErrorCode.REQUEST_IN_PROGRESS);
-    }
-
-    private Cabinet lockCabinetsInIdOrder(Long oldId, Long newId) {
-        Cabinet locked = null;
-        for (Long id : java.util.stream.Stream.of(oldId, newId).distinct().sorted().toList()) {
-            Cabinet cabinet =
-                    cabinetRepository
-                            .findByIdWithLock(id)
-                            .orElseThrow(() -> new ServiceException(ErrorCode.CABINET_NOT_FOUND));
-            if (id.equals(newId)) {
-                locked = cabinet;
-            }
-        }
-        return locked;
+        transactionTemplate.execute(
+                status -> {
+                    processSwapTransaction(
+                            userId, newVisibleNum, previousPassword, forceReturn, reason, photoUrl);
+                    return null;
+                });
     }
 
     protected void processSwapTransaction(
@@ -421,18 +319,10 @@ public class LentApplicationService implements LentUseCase {
             Boolean forceReturn,
             String reason,
             String photoUrl) {
-        doSwap(userId, newVisibleNum, previousPassword, forceReturn, reason, photoUrl, null);
-    }
-
-    private void doSwap(
-            Long userId,
-            Integer newVisibleNum,
-            String previousPassword,
-            Boolean forceReturn,
-            String reason,
-            String photoUrl,
-            Cabinet lockedNewCabinet) {
-        User user = lockUser(userId);
+        User user =
+                userRepository
+                        .findById(userId)
+                        .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND));
 
         LentHistory oldLent =
                 lentRepository
@@ -452,14 +342,9 @@ public class LentApplicationService implements LentUseCase {
         }
 
         Cabinet newCabinet =
-                lockedNewCabinet != null
-                        ? lockedNewCabinet
-                        : cabinetRepository
-                                .findByVisibleNumWithLock(newVisibleNum)
-                                .orElseThrow(
-                                        () -> new ServiceException(ErrorCode.CABINET_NOT_FOUND));
-
-        checkCabinetReservation(newVisibleNum, userId);
+                cabinetRepository
+                        .findByVisibleNumWithLock(newVisibleNum)
+                        .orElseThrow(() -> new ServiceException(ErrorCode.CABINET_NOT_FOUND));
 
         if (newCabinet.getStatus() != CabinetStatus.AVAILABLE) {
             throw new ServiceException(ErrorCode.INVALID_CABINET_STATUS);
@@ -486,10 +371,9 @@ public class LentApplicationService implements LentUseCase {
             returnReason = "[User Force] " + previousPassword;
         }
 
-        LocalDateTime swapAt = LocalDateTime.now();
-        checkAndApplyPenalty(user, oldLent, swapAt);
+        checkAndApplyPenalty(user, oldLent);
 
-        oldLent.endLent(swapAt, returnReason);
+        oldLent.endLent(LocalDateTime.now(), returnReason);
         oldLent.attachReturnPhoto(photoUrl);
 
         if (oldCabinet.getStatus() == CabinetStatus.FULL) {
@@ -511,7 +395,10 @@ public class LentApplicationService implements LentUseCase {
     @Override
     @Transactional
     public void usePenaltyExemption(Long userId) {
-        User user = lockUser(userId);
+        User user =
+                userRepository
+                        .findById(userId)
+                        .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getPenaltyDays() <= 0) {
             throw new ServiceException(ErrorCode.PENALTY_NOT_FOUND);
@@ -604,12 +491,6 @@ public class LentApplicationService implements LentUseCase {
         return cancelled;
     }
 
-    private User lockUser(Long userId) {
-        return userRepository
-                .findByIdWithLock(userId)
-                .orElseThrow(() -> new ServiceException(ErrorCode.USER_NOT_FOUND));
-    }
-
     private void checkCabinetReservation(Integer visibleNum, Long userId) {
         var reservedUserId = reservationPort.getReservedUserId(visibleNum);
         if (reservedUserId.isPresent() && !reservedUserId.get().equals(userId)) {
@@ -617,9 +498,11 @@ public class LentApplicationService implements LentUseCase {
         }
     }
 
-    private int checkAndApplyPenalty(User user, LentHistory lentHistory, LocalDateTime now) {
+    private void checkAndApplyPenalty(User user, LentHistory lentHistory) {
+        LocalDateTime now = LocalDateTime.now();
+
         if (!lentHistory.isOverdue(now)) {
-            return 0;
+            return;
         }
 
         int overdueDays = lentHistory.calculateOverdueDays(now);
@@ -634,17 +517,6 @@ public class LentApplicationService implements LentUseCase {
                 overdueDays,
                 newPenalty,
                 user.getPenaltyDays());
-        return newPenalty;
-    }
-
-    private LentReturnResult buildReturnResult(
-            LentHistory lentHistory, int penaltyAppliedDays, LocalDateTime now) {
-        return new LentReturnResult(
-                lentHistory.getExpiredAt(),
-                lentHistory.calculateRemainingDays(now.toLocalDate()),
-                lentHistory.isOverdue(now),
-                penaltyAppliedDays,
-                now);
     }
 
     private void validateLentTypePermission(User user, Cabinet cabinet) {

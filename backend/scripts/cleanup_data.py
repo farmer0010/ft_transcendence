@@ -3,6 +3,7 @@ import re
 file_path = r'd:\cabinet\src\main\resources\data.sql'
 
 def clean_line(line):
+    # Clean explicit Enum values with spaces
     patterns = {
         r"' PRIVATE '": "'PRIVATE'",
         r"' LAPISCINE '": "'LAPISCINE'",
@@ -17,6 +18,8 @@ def clean_line(line):
     for old, new in patterns.items():
         line = line.replace(old, new)
         
+    # Clean Section strings ' Section X ' -> 'Section X'
+    # Use Regex to capture explicit logic
     line = re.sub(r"' Section (\d+) '", r"'Section \1'", line)
     
     return line
