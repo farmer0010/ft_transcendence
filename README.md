@@ -4,9 +4,11 @@
 
 42 경산 캠퍼스의 사물함 대여/반납을 관리하는 서비스입니다. 사용자는 42, 카카오, 구글 OAuth 로 로그인해 사물함을 대여하고 반납하며, 관리자는 사물함 상태와 사용자를 관리합니다. 반납 시 올린 사진은 AI 서버가 비어 있는지 판별해 반납 처리를 돕습니다.
 
+실제 서비스는 [https://subak.site](https://subak.site) 에서 이용할 수 있습니다. 로그인이 필요한 기능(대여·반납·예약 등)은 이 사이트에서 체험하는 것을 권장하며, 아래 로컬 실행은 빌드·기동·공개 API 확인 같은 기본 테스트용입니다.
+
 구성은 세 부분으로 나뉩니다.
 
-- **backend**: 대여/반납, 인증, 결제(코인/상점), 알림(슬랙/카카오), 통계를 담당하는 API 서버
+- **backend**: 대여/반납, 인증, 결제(코인/상점), 알림(슬랙), 통계를 담당하는 API 서버
 - **ai**: 반납 사진으로 사물함이 비었는지 판별하는 이미지 분류 서버 (EfficientNetV2-S 기반)
 - **frontend**: 별도 팀원이 추가할 예정인 사용자 화면 (현재 저장소에는 없음)
 
@@ -28,11 +30,14 @@
 
 ## 3. 설치 방법 및 실행 방법
 
+이 저장소는 private 이므로 클론하려면 접근 권한이 필요합니다. Docker/Docker Compose 외에 로컬에 Java 17 이 필요합니다(Gradle Wrapper 로 backend 를 빌드합니다).
+
 ```bash
-git clone https://github.com/farmer0010/42_subak_be_ai.git
-cd 42_subak_be_ai
-make up      # .env 생성 안내 → backend 빌드 → 전체 컨테이너 기동
-make seed    # 가짜 사물함/사용자 데이터 시드
+git clone https://github.com/42gyeongsan-hackathon-2026/42.Zip-team12.git
+cd 42.Zip-team12
+cp .env.example .env
+make up      # backend 빌드 → 전체 컨테이너 기동
+make seed    # 사물함 304개 시드 (사용자 데이터는 없음)
 make check   # 상태 확인용 API 호출
 ```
 
@@ -67,9 +72,11 @@ cp .env.example .env
 | 슬랙 알림 | 아니오 | 토큰은 기동 시점에 검증하지 않지만, 실제 슬랙 API 호출 시점에 인증 오류로 실패합니다. |
 | 반납 사진 업로드 | 아니오 | Azure Blob 클라이언트 생성 자체는 기동에 영향을 주지 않지만, 실제 업로드 시점에 가짜 자격 증명으로 실패합니다. |
 
-이 세 기능을 뺀 사물함 조회·대여·연장 등 기본 기능은 자리표시자로도 동작합니다.
+자리표시자 상태에서는 사물함 조회·현황 같은 공개 API만 확인할 수 있고, 대여·반납·연장 등은 OAuth 로그인이 필요합니다.
 
-루트 `docker-compose.yml` 이 `backend` 서비스에 명시적으로 넘기지 않는 변수(`CHATBOT_*`, `SLACK_NOTICE_*`, `SLACK_REPORT_*`, `GEMINI_API_KEY`, `APP_AUTH_COOKIE_SECURE` 등 선택 기능 변수)는 `.env` 에 값을 채워도 `make up` 으로 띄운 컨테이너에는 적용되지 않습니다.
+루트 `docker-compose.yml` 이 `backend` 서비스에 명시적으로 넘기지 않는 변수(`SLACK_NOTICE_*`, `SLACK_REPORT_*`, `GEMINI_API_KEY`, `APP_AUTH_COOKIE_SECURE` 등 선택 기능 변수)는 `.env` 에 값을 채워도 `make up` 으로 띄운 컨테이너에는 적용되지 않습니다.
+
+루트 `.env.example`은 로컬 데모용이며 위 `docker-compose.yml`과 변수 구성이 일치합니다. `backend/.env.example`은 운영 프로파일(외부 관리형 DB·SSL Redis) 참고용이며 로컬 compose 에는 쓰지 않습니다.
 
 ## 5. 접속·확인 방법
 
@@ -80,10 +87,12 @@ cp .env.example .env
 - Grafana: `http://localhost:3000` (admin / admin)
 - AI 서버 상태: `make check-ai` (컨테이너 내부 네트워크 전용, 호스트에는 `127.0.0.1:8000` 으로만 열림)
 - 사물함 현황(로그인 불필요): `curl http://localhost/v4/cabinets/status-summary/all` (`make check` 와 같은 호출입니다)
-- 프론트엔드: (제출 시 기재)
-- 배포 주소: (제출 시 기재)
+- 프론트엔드: https://subak.site
+- 배포 주소: https://subak.site
 
-로그인은 42/카카오/구글 OAuth 뿐이며, 별도의 테스트 계정은 제공하지 않습니다. 시드로 넣는 `demo-*` 사용자는 DB 데이터일 뿐 로그인 계정이 아닙니다.
+로그인 없이 확인 가능한 것은 `GET /v4/cabinets`, `GET /v4/cabinets/{id}`, `GET /v4/cabinets/status-summary`, `GET /v4/cabinets/status-summary/all`, Swagger 뿐입니다. 나머지 `/v4/**` 는 42/카카오/구글 OAuth 로그인이 필요하고, `/v4/admin/**` 와 `/actuator/**` 는 ADMIN 권한이 필요합니다.
+
+로그인은 42/카카오/구글 OAuth 뿐이며, 별도의 테스트 계정은 제공하지 않습니다. 시드는 사물함 데이터뿐이고 로그인 계정은 없습니다.
 
 로컬에서 로그인하려면 각 OAuth 앱에 redirect URI 를 `{FRONTEND_URL}/login/oauth2/code/{42|kakao|google}` 형식으로 등록해야 합니다(기본값 기준 `http://localhost/login/oauth2/code/42` 등). `FRONTEND_URL` 과 등록한 주소가 한 글자라도 다르면 로그인이 실패합니다.
 
@@ -107,7 +116,7 @@ flowchart LR
     Backend --> MariaDB[(MariaDB)]
     Backend --> Redis[(Redis)]
     Backend --> AI[ai : FastAPI 분류 서버]
-    Backend --> Slack[Slack / Kakao 알림]
+    Backend --> Slack[Slack 알림]
     Prometheus[prometheus] --> Backend
     Grafana[grafana :3000] --> Prometheus
 ```

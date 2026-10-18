@@ -544,6 +544,26 @@ erDiagram
 
 <br>
 
+## 🆕 최근 추가된 기능
+
+### 12. 📌 사물함 예약 교체/취소
+* **15분 선점(TTL):** `POST /v4/lent/reservation/{visibleNum}` 으로 사물함을 Redis 기반으로 15분간 선점합니다.
+* **교체:** 이미 다른 번호를 예약 중인 상태에서 새 번호를 예약하면 기존 예약은 자동 취소되고 새 예약으로 교체됩니다. 같은 번호를 다시 예약하면 400을 반환합니다.
+* **취소:** `DELETE /v4/lent/reservation` 으로 내 예약을 직접 취소합니다. 취소할 예약이 없으면 404(`LENT_012`)를 반환합니다.
+* **원자성:** 교체·취소는 Redis Lua 스크립트로 한 번에 처리되어 동시 요청에도 예약이 항상 1건만 남습니다. 같은 사물함에 동시 예약이 몰리면 500 대신 409(`LOCK_001`)를 반환합니다.
+
+### 13. 👀 예약 노출 필드
+* `GET /v4/cabinets` 목록 응답에 `isReserved`, `isReservedByMe` 추가.
+* `GET /v4/cabinets/{id}` 상세 응답에 `isReserved`, `isReservedByMe`, `reservationRemainingSeconds` 추가.
+* `GET /v4/users/me` 응답에 `reservedVisibleNum`, `reservationRemainingSeconds` 추가.
+* 예약자의 id·이름은 어디에도 노출하지 않습니다. Redis 장애 시에도 목록/상세/내 정보 조회가 실패하지 않고 false/null 로 응답합니다.
+
+### 14. 🔰 최초 대여 여부
+* `GET /v4/users/me` 응답에 `isFirstRental`(boolean) 추가.
+* 대여 이력(`LentHistory`)이 한 건도 없으면 true, 현재 대여 중이거나 과거에 반납을 완료한 적이 있으면 false입니다. 스키마 변경 없이 기존 이력 존재 여부로만 판별합니다.
+
+<br>
+
 ## 🔄 System Logic & Sequence Diagrams
 
 > 주요 비즈니스 로직의 상세 흐름입니다.
@@ -799,6 +819,7 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | `POST` | `/v4/lent/cabinets/{visibleNum}` | 사물함 대여 시작 |
 | `POST` | `/v4/lent/reservation/{visibleNum}` | **[NEW]** 사물함 예약 (15분 선점, 대여 중이면 이사 예약으로 자동 처리) |
+| `DELETE` | `/v4/lent/reservation` | **[NEW]** 내 예약 취소 |
 | `POST` | `/v4/lent/check-image` | **[AI]** 반납 사진 사전 검증 (AI 청결도 검사만 선실행) |
 | `POST` | `/v4/lent/return` | **[AI/Manual]** 반납 (forceReturn=true 시 강제 반납/사유 입력) |
 | `POST` | `/v4/lent/swap/{newVisibleNum}` | **[Item]** 이사권을 사용해 사물함 이동 |
@@ -881,77 +902,21 @@ sequenceDiagram
 
 ## ⚙️ Setup & Run
 
-### 1. 환경 설정 (Configuration)
-보안을 위해 실제 설정 파일은 저장소에 포함되지 않습니다. 아래 파일을 생성하여 환경 변수를 설정하세요.
+실행은 이 레포 루트([README.md](../README.md))의 절차를 따릅니다: 루트에서 `.env.example`을 `.env`로 복사하고 `make up`(backend 빌드 → 전체 컨테이너 기동), `make seed`(사물함 304개 시드) 순서로 진행합니다. backend 폴더만 따로 실행하지 않습니다.
 
-**A. `.env` 파일 생성 (Root Directory)**  
-프로젝트 루트 디렉토리에 `.env` 파일을 생성하고 아래 내용을 작성하세요.
-```properties
-# Database
-DB_ROOT_PASSWORD=root_password
-DB_USER=subak
-DB_PASSWORD=subak_password
+운영 배포(Azure)는 이 제출물과는 별개입니다.
 
-# Redis
-REDIS_PORT=6379
-
-# OAuth & Security
-FT_CLIENT_ID=your_42_client_id
-FT_CLIENT_SECRET=your_42_client_secret
-JWT_SECRET=your_jwt_strong_secret_key
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-
-# Service URLs
-FRONTEND_URL=http://localhost
-AI_SERVER_URL=http://ai_server:8000
-COOKIE_SECURE=false
-CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:3000
-
-# Timezone
-TZ=Asia/Seoul
-```
-
-**B. `src/main/resources/secret.properties` (Optional)**
-`.env`로 대체 가능하나, 로컬 실행 시 필요할 수 있습니다. `application.yml`의 환경 변수를 대체할 수 있도록 동일한 키를 포함해야 합니다.
-```properties
-# Database
-spring.datasource.username=subak
-spring.datasource.password=subak_password
-
-# Security & OAuth
-jwt.secret=your_jwt_strong_secret_key
-FT_CLIENT_ID=your_42_client_id
-FT_CLIENT_SECRET=your_42_client_secret
-SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-
-# Service Config
-FRONTEND_URL=http://localhost
-AI_SERVER_URL=http://localhost:8000
-CORS_ALLOWED_ORIGINS=http://localhost,http://localhost:3000
-```
-
-### 2. 실행 (Docker Compose)
-모든 서비스(Nginx, Backend, DB, Monitoring)를 한 번에 실행합니다.
-
-```bash
-# 1. 애플리케이션 빌드
-./gradlew clean build -x test
-
-# 2. 전체 인프라 실행 (Background)
-docker-compose up -d --build
-```
-
-### 3. 접속 정보
-* **메인 서비스:** `http://localhost` (Port 80)
+### 1. 접속 정보
+* **메인 서비스:** `http://localhost` (Port 80, Nginx)
 * **Grafana:** `http://localhost:3000` (계정: admin / admin)
-* **Prometheus:** `http://localhost:9090`
+* **Prometheus:** 호스트에는 노출되지 않고 컨테이너 내부 네트워크에서만 접근됩니다(Grafana가 내부적으로 조회).
 
-### 4. 테스트 계정 정보 (Test Accounts)
+### 2. 테스트 계정 정보 (Test Accounts)
 `data.sql`을 통해 초기 데이터가 로드됩니다. 관리자 권한이 필요한 경우 DB에서 직접 `role`을 `ADMIN`으로 변경하거나 초기 데이터를 확인하세요.
 
 > **Tip:** 로그인 후 `/v4/admin/users/{your_intra_id}/coin` API를 통해 코인을 추가로 지급받아 상점 기능을 테스트해볼 수 있습니다.
 
-### 5. 주요 테스트 시나리오
+### 3. 주요 테스트 시나리오
 1. **대여/반납:** 메인 화면에서 사물함 선택 -> 대여 -> 내 정보 -> 반납 (사진 업로드)
 2. **자동 연장:** 상점에서 `연장권` 구매 -> `/v4/lent/extension/auto` API로 자동 연장 ON 설청 -> (DB에서 만료일 조작하여 테스트 close)
 3. **관리자 모드:** URL에 `/admin/login` 접근 -> (Admin 계정 필요) -> 대시보드 확인
