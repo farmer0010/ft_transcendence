@@ -1,0 +1,12 @@
+.git
+gitdata
+node_modules
+dist
+dist-ssr
+.npm-cache
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+*.tsbuildinfo

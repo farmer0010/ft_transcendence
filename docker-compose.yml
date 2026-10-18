@@ -72,6 +72,9 @@ services:
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - jwt.secret=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_42_REDIRECT_URI=${FRONTEND_URL}/login/oauth2/code/42
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_KAKAO_REDIRECT_URI=${FRONTEND_URL}/login/oauth2/code/kakao
+      - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_GOOGLE_REDIRECT_URI=${FRONTEND_URL}/login/oauth2/code/google
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
       - KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
@@ -107,6 +110,20 @@ services:
       - ./backend/nginx/conf.d:/etc/nginx/conf.d
     depends_on:
       - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  fe:
+    build: ./fe
+    container_name: cabi_fe
+    restart: always
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - nginx
     logging:
       driver: "json-file"
       options:
