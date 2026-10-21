@@ -62,9 +62,6 @@ jwt:
   access-token-validity: 1800000
   refresh-token-validity: 1209600000
 
-slack:
-  token: test-slack-token
-
 app:
   frontend:
     url: http://localhost:3000

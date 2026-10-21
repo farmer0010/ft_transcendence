@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -17,7 +18,11 @@ public class AdminAlarmService implements AdminAlarmUseCase {
     private final LentRepositoryPort lentRepository;
     private final AlarmPort alarmPort;
 
+    // AlarmPort now publishes an AlarmEvent that is picked up by an
+    // AFTER_COMMIT transactional listener (see AlarmEventHandler), so this
+    // needs an explicit transaction boundary for that listener to fire.
     @Override
+    @Transactional(readOnly = true)
     public void sendEmergencyNotice(String message) {
         List<LentHistory> activeLents = lentRepository.findAllActiveLents();
 

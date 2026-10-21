@@ -1,4 +1,4 @@
-package com.gyeongsan.cabinet.alarm;
+package com.gyeongsan.notification.alarm;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.annotation.PostConstruct;
@@ -7,7 +7,7 @@ import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpEntity;
@@ -18,8 +18,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+/**
+ * Moved from the cabinet backend as-is as part of splitting Slack
+ * notification delivery into its own service. Behavior is unchanged.
+ */
 @Service
-@Log4j2
+@Slf4j
 public class SlackBotService {
 
     @Value("${slack.token}")

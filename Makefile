@@ -1,10 +1,10 @@
 COMPOSE ?= docker compose
-SERVICES := mariadb redis ai backend nginx fe prometheus grafana backup uptime-kuma uptime-kuma-init
+SERVICES := mariadb redis ai backend notification-service nginx fe prometheus grafana backup uptime-kuma uptime-kuma-init
 NPM ?= npm
 JDBC_LOCAL := jdbc:mariadb://127.0.0.1:13306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false
 
 .DEFAULT_GOAL := help
-.PHONY: help env env-fe install-fe build build-backend build-fe up down reset seed logs logs-fe ps check check-fe check-ai fe run test backup restore dr-test
+.PHONY: help env env-fe install-fe build build-backend build-notification build-fe up down reset seed logs logs-fe ps check check-fe check-ai fe run test backup restore dr-test
 
 help:
 	@echo "사용법: make <대상>"
@@ -38,10 +38,13 @@ env-fe:
 install-fe: env-fe
 	$(NPM) --prefix fe ci --cache "$(CURDIR)/fe/.npm-cache"
 
-build: build-backend build-fe
+build: build-backend build-notification build-fe
 
 build-backend: env
 	backend/gradlew -p backend clean build -x test
+
+build-notification: env
+	notification-service/gradlew -p notification-service clean build -x test
 
 build-fe: install-fe
 	$(NPM) --prefix fe run build
@@ -49,7 +52,7 @@ build-fe: install-fe
 fe: install-fe
 	$(NPM) --prefix fe run dev
 
-up: build-backend
+up: build-backend build-notification
 	$(COMPOSE) up -d --build --wait --wait-timeout 180 $(SERVICES)
 	@$(MAKE) --no-print-directory check-fe
 	@echo "기동했습니다."

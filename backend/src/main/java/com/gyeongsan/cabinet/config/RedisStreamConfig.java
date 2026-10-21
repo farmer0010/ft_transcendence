@@ -26,6 +26,10 @@ public class RedisStreamConfig {
     private final RedisConnectionFactory redisConnectionFactory;
     private final StringRedisTemplate stringRedisTemplate;
 
+    // slack-alarm-stream is still written to by AlarmEventHandler, but it is
+    // now consumed by the separate notification-service (see
+    // notification-service/.../config/RedisStreamConfig.java). The backend
+    // only consumes the logtime-sync stream.
     public static final String SLACK_STREAM_KEY = "slack-alarm-stream";
     public static final String LOGTIME_STREAM_KEY = "logtime-sync-stream";
     public static final String CONSUMER_GROUP_NAME = "cabinet-backend-group";
@@ -34,8 +38,6 @@ public class RedisStreamConfig {
     @Bean
     public StreamMessageListenerContainer<String, MapRecord<String, String, String>>
             streamMessageListenerContainer(
-                    StreamListener<String, MapRecord<String, String, String>>
-                            slackAlarmStreamListener,
                     StreamListener<String, MapRecord<String, String, String>>
                             logtimeStreamListener) {
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
@@ -50,13 +52,7 @@ public class RedisStreamConfig {
         StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
                 StreamMessageListenerContainer.create(redisConnectionFactory, options);
 
-        createStreamGroup(SLACK_STREAM_KEY);
         createStreamGroup(LOGTIME_STREAM_KEY);
-
-        container.receive(
-                Consumer.from(CONSUMER_GROUP_NAME, consumerName),
-                StreamOffset.create(SLACK_STREAM_KEY, ReadOffset.lastConsumed()),
-                slackAlarmStreamListener);
 
         container.receive(
                 Consumer.from(CONSUMER_GROUP_NAME, consumerName),

@@ -82,7 +82,6 @@ services:
       - REDIS_ALLOW_INSECURE=true
       - FT_CLIENT_ID=${FT_CLIENT_ID}
       - FT_CLIENT_SECRET=${FT_CLIENT_SECRET}
-      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
       - jwt.secret=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
       - SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_42_REDIRECT_URI=${FRONTEND_URL}/login/oauth2/code/42
@@ -116,6 +115,32 @@ services:
       timeout: 5s
       retries: 15
       start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  notification-service:
+    container_name: cabi_notification
+    build: ./notification-service
+    restart: on-failure
+    expose:
+      - "8081"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN}
+      - TZ=Asia/Seoul
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
     logging:
       driver: "json-file"
       options:

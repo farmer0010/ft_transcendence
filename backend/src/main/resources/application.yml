@@ -137,9 +137,6 @@ jwt:
 auth:
   allowed-email-domain: 42gyeongsan.kr
 
-slack:
-  token: ${SLACK_BOT_TOKEN}
-
 ai:
   server:
     url: ${AI_SERVER_URL:http://ai:8000}
