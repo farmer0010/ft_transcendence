@@ -1,10 +1,10 @@
 COMPOSE ?= docker compose
-SERVICES := mariadb redis ai backend nginx fe prometheus grafana
+SERVICES := mariadb redis ai backend nginx fe prometheus grafana backup uptime-kuma uptime-kuma-init
 NPM ?= npm
 JDBC_LOCAL := jdbc:mariadb://127.0.0.1:13306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false
 
 .DEFAULT_GOAL := help
-.PHONY: help env env-fe install-fe build build-backend build-fe up down reset seed logs logs-fe ps check check-fe check-ai fe run test
+.PHONY: help env env-fe install-fe build build-backend build-fe up down reset seed logs logs-fe ps check check-fe check-ai fe run test backup restore dr-test
 
 help:
 	@echo "사용법: make <대상>"
@@ -25,6 +25,9 @@ help:
 	@echo "  reset     컨테이너와 데이터(db_data, redis_data)를 모두 지운다"
 	@echo "  run       DB 와 Redis 만 compose 로 띄우고 gradlew bootRun 으로 실행한다"
 	@echo "  test      backend 전체 테스트를 실행한다 (Docker 필요)"
+	@echo "  backup    MariaDB/Redis 백업을 즉시 1회 실행한다"
+	@echo "  restore   백업에서 복구한다 (예: make restore TARGET=mariadb FILE=cabi_20260101_000000.sql.gz)"
+	@echo "  dr-test   백업 -> DB 초기화 -> 복구 -> 데이터 검증까지 자동으로 수행한다"
 
 env: env-fe
 	@if [ ! -f .env ]; then cp .env.example .env && echo ".env 를 만들었습니다. 값을 확인하세요."; fi
@@ -47,13 +50,7 @@ fe: install-fe
 	$(NPM) --prefix fe run dev
 
 up: build-backend
-	$(COMPOSE) up -d --build $(SERVICES)
-	@echo "백엔드 기동을 기다립니다 (최대 120초)"
-	@i=0; until $(COMPOSE) logs backend 2>/dev/null | grep -q "Started CabinetApplication"; do \
-		i=$$((i+1)); \
-		if [ $$i -gt 60 ]; then echo "시간 안에 기동하지 못했습니다. make logs 로 확인하세요."; exit 1; fi; \
-		sleep 2; \
-	done
+	$(COMPOSE) up -d --build --wait --wait-timeout 180 $(SERVICES)
 	@$(MAKE) --no-print-directory check-fe
 	@echo "기동했습니다."
 	@echo "  FE       http://localhost:5173"
@@ -112,3 +109,12 @@ run: env
 
 test:
 	backend/gradlew -p backend clean test
+
+backup:
+	$(COMPOSE) exec backup /scripts/backup.sh
+
+restore:
+	$(COMPOSE) exec backup /scripts/restore.sh $(TARGET) $(FILE)
+
+dr-test:
+	./scripts/dr-test.sh

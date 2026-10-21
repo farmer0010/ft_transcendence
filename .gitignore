@@ -4,6 +4,7 @@
 .DS_Store
 db_data/
 redis_data/
+backups/
 .idea/
 *.iml
 .vscode/

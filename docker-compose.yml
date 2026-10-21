@@ -14,6 +14,12 @@ services:
     volumes:
       - ./db_data:/var/lib/mysql
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h127.0.0.1 -u$$DB_USER -p$$DB_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -31,6 +37,12 @@ services:
     volumes:
       - ./redis_data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     logging:
       driver: "json-file"
       options:
@@ -45,6 +57,7 @@ services:
       - "127.0.0.1:8000:8000"
     environment:
       - MODEL_PATH=${AI_MODEL_PATH}
+    # healthcheck is already declared in ai/Dockerfile (GET /health)
     logging:
       driver: "json-file"
       options:
@@ -91,9 +104,18 @@ services:
           - cabi_backend_blue
           - cabi_backend_green
     depends_on:
-      - mariadb
-      - redis
-      - ai
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
@@ -109,7 +131,14 @@ services:
     volumes:
       - ./backend/nginx/conf.d:/etc/nginx/conf.d
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/v4/cabinets/status-summary/all || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -123,7 +152,14 @@ services:
     ports:
       - "127.0.0.1:5173:80"
     depends_on:
-      - nginx
+      nginx:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     logging:
       driver: "json-file"
       options:
@@ -138,8 +174,50 @@ services:
     expose:
       - "9090"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backup:
+    build: ./backup
+    container_name: cabi_backup
+    restart: always
+    environment:
+      - DB_HOST=mariadb
+      - DB_NAME=cabi
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_DATA_DIR=/redis_data
+      - BACKUP_DIR=/backups
+      - BACKUP_RETENTION_COUNT=${BACKUP_RETENTION_COUNT:-7}
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - TZ=Asia/Seoul
+    volumes:
+      - ./backups:/backups
+      - ./redis_data:/redis_data
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f entrypoint.sh || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   grafana:
     image: grafana/grafana:latest
@@ -147,10 +225,54 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      prometheus:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     volumes:
       - grafana_data:/var/lib/grafana
 
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: cabi_uptime_kuma
+    restart: always
+    ports:
+      - "3001:3001"
+    volumes:
+      - uptime_kuma_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  uptime-kuma-init:
+    build: ./uptime-kuma/provision
+    container_name: cabi_uptime_kuma_init
+    restart: "no"
+    environment:
+      - UPTIME_KUMA_URL=http://uptime-kuma:3001
+      - UPTIME_KUMA_ADMIN_USER=${UPTIME_KUMA_ADMIN_USER}
+      - UPTIME_KUMA_ADMIN_PASSWORD=${UPTIME_KUMA_ADMIN_PASSWORD}
+    depends_on:
+      uptime-kuma:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      nginx:
+        condition: service_healthy
+
 volumes:
   grafana_data:
+  uptime_kuma_data:
