@@ -2,17 +2,21 @@
 
 # Subak (수박) — Campus Locker Management System
 
+> **Live service: https://subak.site/**
+
 ## Description
 
 Subak is a full-stack web application that manages locker rental and return for the 42 Gyeongsan campus. Users sign in with 42, Kakao, or Google OAuth to browse, rent, return, and reserve lockers, while admins manage locker status and user accounts from a dedicated dashboard. When a user returns a locker, the photo they upload is automatically checked by a separate AI image-classification server to confirm the locker is actually empty before the return is finalized.
 
 The live service is available at **[https://subak.site](https://subak.site)**. Features that require authentication (renting, returning, reserving, the coin store, the attendance check-in, etc.) are best explored there; the local setup below is intended for building, booting the stack, and exercising the public API.
 
-The project is split into three services:
+The core application is three services, backed by a small fleet of infrastructure services:
 
-- **backend** — the API server responsible for rental/return workflows, OAuth authentication, the coin wallet and store, Slack notifications, and admin statistics.
+- **backend** — the API server responsible for rental/return workflows, OAuth authentication, the coin wallet and store, admin statistics, and bulk data export/import. Publishes events for notifications; never calls Slack directly.
 - **ai** — an image-classification server (EfficientNetV2-S) that decides whether a returned locker is actually empty from the uploaded photo.
 - **fe** — the React + TypeScript web client: locker browsing, rental/return/reservation, "my locker," the coin store, attendance, a watermelon gamification event, and the admin screens.
+
+Supporting infrastructure: **notification-service** (the only service that calls the Slack API, decoupled from the backend via a Redis Stream), **Elasticsearch/Logstash/Kibana** (centralized structured logging), **Uptime Kuma** (a public status page), a **backup** service (scheduled MariaDB/Redis backups with a tested restore path), and **Prometheus/Grafana** (metrics). See [docs/architecture.md](docs/architecture.md) for how they fit together.
 
 ### Key features
 
@@ -21,9 +25,12 @@ The project is split into three services:
 - AI-assisted return verification from a photo, backed by a dedicated microservice
 - A coin wallet, item store, and a "watermelon" gamification event with levels and a leaderboard
 - Daily attendance check-in that rewards users with coins
-- Slack notifications for rental/return/overdue events, driven by a Redis stream
+- Slack notifications for rental/return/overdue events, delivered by an independent notification-service via a Redis stream
 - An admin dashboard for user, locker, and ban management with usage statistics
-- Prometheus/Grafana monitoring and a Swagger-documented public API
+- Admin bulk data export (JSON/CSV/XML) and validated locker import
+- Centralized structured logging (Elasticsearch/Logstash/Kibana) and a public status page (Uptime Kuma), on top of Prometheus/Grafana metrics and a Swagger-documented public API
+- Scheduled, verified backups of MariaDB and Redis with a one-command disaster-recovery rehearsal
+- A single `make up` brings up and seeds the entire stack, including all of the above
 
 ## Instructions
 
@@ -41,6 +48,8 @@ The project is split into three services:
 | PyTorch | 2.2.2 |
 | MariaDB | 10.6 |
 | Redis | alpine (latest) |
+| Elasticsearch / Logstash / Kibana | 8.15.3 |
+| Uptime Kuma | 1 |
 | Docker / Docker Compose | latest stable |
 
 `make up` builds the FE inside a Node.js 22 Docker image, so Node.js is not required on the host for that path. The FE dev server (`make fe`) and a host build (`make build`) do require Node.js 22+ and npm. Running everything without Docker additionally requires installing Java 17, Python 3.11, MariaDB, and Redis yourself. See [fe/README.md](fe/README.md) for FE-specific setup.
@@ -48,16 +57,16 @@ The project is split into three services:
 ### Running the project
 
 ```bash
-git clone https://github.com/42gyeongsan-hackathon-2026/42.Zip-team12.git
-cd 42.Zip-team12
-make env      # generate root .env and fe/.env (existing files are kept)
-make up       # build backend, build FE, start the full container stack
-make seed     # seed 304 lockers (no user data)
-make check    # call a status API as a smoke test
-make check-fe # verify the FE screen and the FE proxy to the public API
+git clone https://github.com/farmer0010/ft_transcendence.git
+cd ft_transcendence
+make up
 ```
 
+That's it. `make up` generates `.env`/`fe/.env` from the example files if they don't exist yet, builds the backend and notification-service JARs and the FE bundle, starts every container (app services, AI, nginx, MariaDB/Redis, ELK, Uptime Kuma, Prometheus/Grafana, the backup service), waits for all of them to report healthy, seeds the 304 lockers (safe to run again — it's idempotent), and runs a smoke check against the FE and the public API. A clean clone to a fully seeded, running stack takes under a minute.
+
 Open **http://localhost:5173** in a browser. FE requests to `/api/v4/*` are proxied through Nginx to the local backend's `/v4/*`. Routes such as `/lockers` can also be opened or refreshed directly.
+
+`make seed`, `make check`, and `make check-fe` still exist standalone if you need to re-seed or re-verify without a full `make up`.
 
 To develop against the FE while the rest of the stack is running, stop the FE container first (it shares port 5173 with the dev server) and start the dev server:
 
@@ -72,16 +81,22 @@ Key `make` targets:
 
 | Command | Description |
 |---|---|
-| `make build` | Build the backend JAR and type-check/build the FE for production |
+| `make build` | Build the backend/notification-service JARs and type-check/build the FE for production |
 | `make build-fe` | Install FE dependencies (`npm ci`) and type-check/build |
 | `make logs-fe` | Tail the FE container logs |
 | `make down` | Stop every container, including FE, keeping data |
+| `make backup` | Run a MariaDB + Redis backup immediately |
+| `make restore` | Restore from the newest backup (`make restore TARGET=redis`, `FILE=...` to pick a specific one) |
+| `make dr-test` | Automated rehearsal: backup → wipe the DB → restore → verify the data is back |
 
 For running services without `make`, running locally without containers, or per-service configuration, see each folder's README:
 
 - Backend: [backend/README.md](backend/README.md)
 - AI service: [ai/README.md](ai/README.md) (based on [42-Gy/ft_cabinet_AI](https://github.com/42-Gy/ft_cabinet_AI))
 - Frontend: [fe/README.md](fe/README.md)
+- Service boundaries and the notification event flow: [docs/architecture.md](docs/architecture.md)
+- Backup/restore and disaster recovery: [docs/disaster-recovery.md](docs/disaster-recovery.md)
+- Step-by-step demo instructions for every module below: [docs/eval-demo.md](docs/eval-demo.md)
 
 ### Environment variables
 
@@ -90,7 +105,7 @@ cp .env.example .env
 cp fe/.env.example fe/.env
 ```
 
-`make env` generates both files as well. Values in `.env.example` are placeholders; real values belong in the git-ignored `.env`. Required variables include DB credentials, the JWT secret, 42/Kakao/Google OAuth client credentials, the Slack bot token, the Azure Blob Storage connection string, and the AI model path (`AI_MODEL_PATH`). Lines starting with `#` are optional and already show their default. See the comments in `.env.example` and [backend/README.md](backend/README.md) for details on each variable.
+`make env` generates both files as well. Values in `.env.example` are placeholders; real values belong in the git-ignored `.env`. Required variables include DB credentials, the JWT secret, 42/Kakao/Google OAuth client credentials, the Slack bot token, the Azure Blob Storage connection string, the AI model path (`AI_MODEL_PATH`), the Elasticsearch/Kibana/Logstash account passwords (`ELASTIC_PASSWORD`, `KIBANA_SYSTEM_PASSWORD`, `LOGSTASH_WRITER_PASSWORD`), and the Uptime Kuma admin account (`UPTIME_KUMA_ADMIN_USER`/`UPTIME_KUMA_ADMIN_PASSWORD`). Lines starting with `#` are optional and already show their default. See the comments in `.env.example` and [backend/README.md](backend/README.md) for details on each variable.
 
 The FE dev server reads `fe/.env`. By default it uses the local API with `VITE_API_BASE_URL=/api` and `VITE_USE_MOCK=false`. `VITE_*` values end up in the browser bundle, so secrets never go there. The FE container is built from `fe/.env.example`; a personal `fe/.env` is never baked into the Docker image. See [fe/README.md](fe/README.md) for the full variable list.
 
@@ -125,8 +140,11 @@ Once `make up` has started the full stack:
 - Local frontend: `http://localhost:5173`
 - Swagger: `http://localhost/swagger-ui/index.html`
 - Grafana: `http://localhost:3000` (admin / admin)
+- Kibana (logs): `http://localhost:5601` (log in as `elastic` with `ELASTIC_PASSWORD` from `.env`)
+- Uptime Kuma (status page): `http://localhost:3001` (log in with `UPTIME_KUMA_ADMIN_USER`/`UPTIME_KUMA_ADMIN_PASSWORD` from `.env`)
 - AI service health: `make check-ai` (only reachable on the internal Docker network, exposed on the host as `127.0.0.1:8000`)
 - Locker status summary (no login required): `curl http://localhost/v4/cabinets/status-summary/all` (same call as `make check`)
+- Admin data export (requires an admin session): `curl http://localhost/v4/admin/data/export/cabinets?format=csv`
 - Deployed instance: https://subak.site
 
 The only endpoints usable without logging in are `GET /v4/cabinets`, `GET /v4/cabinets/{id}`, `GET /v4/cabinets/status-summary`, `GET /v4/cabinets/status-summary/all`, and Swagger. Every other `/v4/**` endpoint requires 42/Kakao/Google OAuth login, and `/v4/admin/**` plus `/actuator/**` require the ADMIN role.
@@ -142,6 +160,12 @@ To log in locally, register real OAuth client credentials and set each provider'
 | `backend/` | API server (Spring Boot) |
 | `ai/` | Image classification server (FastAPI + PyTorch), including a test webapp |
 | `fe/` | Web frontend (React + TypeScript + Vite), with Docker/Nginx configuration |
+| `notification-service/` | Slack notification delivery (Spring Boot), split out of the backend |
+| `elk/` | Logstash pipeline config and the Elasticsearch/Kibana setup + dashboard-import scripts |
+| `uptime-kuma/provision/` | One-shot container that auto-creates the status page's monitors |
+| `backup/` | MariaDB/Redis backup + restore scripts and the service that runs them on a schedule |
+| `scripts/` | Host-side scripts (currently the disaster-recovery rehearsal) |
+| `docs/` | Architecture, disaster-recovery, and evaluation-demo documentation |
 
 ### Architecture
 
@@ -153,7 +177,18 @@ flowchart LR
     Backend --> MariaDB[(MariaDB)]
     Backend --> Redis[(Redis)]
     Backend --> AI[ai : FastAPI classifier]
-    Backend --> Slack[Slack notifications]
+    Backend -->|Redis Stream| Notification[notification-service]
+    Notification --> Slack[Slack API]
+    Backend -->|structured JSON logs| Logstash
+    Nginx -->|access/error logs, file-tailed| Logstash
+    Logstash --> Elasticsearch[(Elasticsearch)]
+    Kibana[kibana :5601] --> Elasticsearch
+    Backup[backup service] --> MariaDB
+    Backup --> Redis
+    UptimeKuma[uptime-kuma :3001] -. probes .-> Backend
+    UptimeKuma -. probes .-> AI
+    UptimeKuma -. probes .-> MariaDB
+    UptimeKuma -. probes .-> Redis
     Prometheus[prometheus] --> Backend
     Grafana[grafana :3000] --> Prometheus
 ```
@@ -162,10 +197,10 @@ flowchart LR
 
 | Member | Role(s) | Responsibilities |
 |---|---|---|
-| **juyoukim** | Technical Lead, Backend & Infrastructure Developer | Backend architecture, API design, database integration, OAuth/auth logic, Docker/Nginx deployment, monitoring setup |
-| **seonghan** | Project Manager, Frontend Developer, AI Developer | Sprint planning and scheduling, frontend feature screens, the AI return-verification model and service |
+| **juyoukim** | Technical Lead, Backend & Infrastructure Developer | Backend architecture, API design, database integration, OAuth/auth logic, Docker/Nginx deployment, logging/monitoring/status-page infrastructure |
+| **seonghan** | Product Owner, Project Manager, Frontend Developer, AI Developer | Product vision and feature prioritization, sprint planning and scheduling, frontend feature screens, the AI return-verification model and service |
 | **byoulee** | Project Manager, Frontend Developer | Task tracking and scheduling, frontend feature screens, UI consistency |
-| **taewonki** | Documentation / QA | Documentation upkeep, issue tracking, release validation |
+| **taewonki** | Developer (Documentation / QA) | Documentation upkeep, issue tracking, release validation |
 
 ## Project Management
 
@@ -207,12 +242,32 @@ The team split work along backend/infrastructure, frontend, AI, and documentatio
 
 **Why this choice:** MariaDB models users, lockers, coin/item history, and the watermelon event with clear relational constraints; Redis provides fast caching, distributed locking for concurrent rentals, and the stream backing the notification pipeline.
 
+### notification-service
+
+- Java 17, Spring Boot 3.5.8, a thin single-purpose Redis Stream consumer
+
+**Why this choice:** Slack delivery has its own external dependency and failure mode, and nothing to do with locker/rental logic. Splitting it into its own Spring Boot service (sharing almost no code with the backend) means a Slack outage or rate limit can never block a rental/return request, and either service can be deployed or restarted independently. See [docs/architecture.md](docs/architecture.md) for the full event flow.
+
+### Logging — ELK
+
+- Elasticsearch, Logstash, and Kibana (pinned 8.15.3)
+- `logstash-logback-encoder` (backend/notification-service, streaming structured JSON over TCP) and a Logstash `file` input (nginx, via a shared log volume)
+
+**Why this choice:** Centralizing logs from three independently-scaled services (backend, notification-service, nginx) is only useful once they're structured and searchable in one place. An ILM policy rolls over and deletes indices automatically, so retention doesn't need manual cleanup. See [docs/architecture.md](docs/architecture.md) for why each service's logs are collected the way they are (and why `ai`'s aren't, yet).
+
+### Status page and backups
+
+- Uptime Kuma, auto-provisioned with monitors for backend/ai/nginx/mariadb/redis on first boot
+- A dedicated `backup` service running scheduled `mariadb-dump`/Redis `BGSAVE` backups, with a tested restore path and an automated DR rehearsal (`make dr-test`)
+
+**Why this choice:** A status page and a backup strategy that nobody has verified actually restores data are both common sources of false confidence; both are provisioned automatically and the restore path is scripted and tested, not just documented. See [docs/disaster-recovery.md](docs/disaster-recovery.md).
+
 ### Infrastructure and tooling
 
 - Docker / Docker Compose, Nginx, a Makefile for local automation
 - Prometheus + Grafana for monitoring
 
-**Why this choice:** Docker Compose gives the whole stack (DB, cache, AI service, backend, FE, reverse proxy) a single-command local setup, Nginx routes the FE, API, and OAuth callbacks consistently, and Prometheus/Grafana give visibility into the running service.
+**Why this choice:** Docker Compose gives the whole stack (DB, cache, AI service, backend, FE, reverse proxy, logging, status page, backups) a single-command local setup (`make up`), Nginx routes the FE, API, and OAuth callbacks consistently, and Prometheus/Grafana give visibility into the running service.
 
 ## Database Schema
 
@@ -349,9 +404,13 @@ erDiagram
 | Attendance check-in | Daily check-in rewarded with coins, tracked in admin statistics | juyoukim, seonghan |
 | Watermelon gamification event | A level-up mini-game with protections/fertilizers, backed by a leaderboard | juyoukim, seonghan |
 | Admin dashboard | User, locker, and ban management with usage statistics | juyoukim, byoulee |
-| Slack notifications | Rental/return/overdue events pushed to Slack via a Redis stream | juyoukim |
+| Slack notifications | Rental/return/overdue events pushed to Slack via a Redis stream, delivered by an independent notification-service | juyoukim |
 | Monitoring | Backend metrics visualized through Prometheus and Grafana dashboards | juyoukim |
 | Public API | Swagger-documented REST API, authenticated and rate-limited | juyoukim |
+| Admin data export/import | JSON/CSV/XML export of lockers/rental/coin history, and validated locker import (all-or-nothing, full per-row error report) | juyoukim |
+| Centralized logging | Structured JSON logs from backend/notification-service/nginx, searchable in Kibana with a pre-built dashboard | juyoukim |
+| Status page | Uptime Kuma, auto-provisioned monitors for every core service | juyoukim |
+| Backup & disaster recovery | Scheduled MariaDB/Redis backups, a restore script, and an automated backup→wipe→restore→verify rehearsal | juyoukim |
 
 ## Modules
 
@@ -367,11 +426,22 @@ erDiagram
 | Notification system | Minor | 1 | Users and admins need to know about rental/return/overdue events without polling the app | Redis Stream events consumed by a Slack bot | juyoukim |
 | Gamification system | Minor | 1 | Encourages daily engagement beyond the core rental flow | Watermelon leveling with a leaderboard, daily attendance check-ins, and coin rewards spendable in the store | juyoukim, seonghan |
 
-### Module score
+### Module score (required 14 points)
 
 - Major modules: 5 x 2 = 10 points
 - Minor modules: 4 x 1 = 4 points
 - **Total: 14 points**
+
+### Bonus modules (beyond the required 14)
+
+| Module | Type | Points | Justification | Implementation | Team member(s) |
+|---|---|---|---|---|---|
+| Infrastructure for log management (ELK) | Major | 2 | Three independently-scaled services (backend, notification-service, nginx) each log separately; centralizing and indexing them is the only way to actually search/correlate a failure across services, and the required components (ILM retention, access control, a dashboard) are all in place | Elasticsearch + Logstash + Kibana, an ILM policy with automatic rollover/delete, a least-privilege Logstash writer account, a Kibana dashboard (error rate / log volume by service / level distribution) auto-imported on boot | juyoukim |
+| Backend as microservices | Major | 2 | Slack delivery has its own external dependency and failure mode and shares no business logic with the backend; splitting it out means a Slack outage/rate limit can never block a rental or return | notification-service: a standalone Spring Boot app consuming a Redis Stream, with its own Dockerfile, health check, and a dedup guard against redelivery | juyoukim |
+| Health check/status page with automated backups and DR | Minor | 1 | A status page and a backup strategy are only trustworthy if the restore path has actually been exercised, not just documented | Docker healthchecks on every service, Uptime Kuma with auto-provisioned monitors, scheduled MariaDB/Redis backups, and `make dr-test` (backup → wipe → restore → verify) | juyoukim |
+| Data export and import | Minor | 1 | Admins need to get locker/rental/coin data out in a format they can analyze or hand off, and bulk-load lockers without touching SQL directly | `/v4/admin/data/export/*` (JSON/CSV/XML, streamed) and `/v4/admin/data/import/cabinets` (all-or-nothing validation with a full per-row error report) | juyoukim |
+
+Raw bonus total is 6 points (2 Major + 2 Minor); the subject caps bonus credit at 5, so **5 of these 6 points are creditable** (e.g. both Major modules + one Minor). Demo steps for every module above, bonus included, are in [docs/eval-demo.md](docs/eval-demo.md); the exact per-module reasoning (what was and wasn't implemented, and why) is in [docs/README_ADDITIONS.md](docs/README_ADDITIONS.md).
 
 ## Resources
 
@@ -385,6 +455,8 @@ erDiagram
 - PyTorch Documentation: https://pytorch.org/docs/
 - Redis Documentation: https://redis.io/docs/
 - MariaDB Documentation: https://mariadb.com/kb/en/
+- Elasticsearch/Logstash/Kibana Documentation: https://www.elastic.co/guide/
+- Uptime Kuma: https://github.com/louislam/uptime-kuma
 
 ### AI usage
 
@@ -398,6 +470,16 @@ AI tools were used to support documentation organization and technical research 
 - Implemented 42/Kakao/Google OAuth login and role-based access control
 - Built the Redis-backed caching, distributed locking, and the event stream powering Slack notifications
 - Set up Docker Compose, Nginx routing, and the Prometheus/Grafana monitoring stack, and integrated the AI service into the return workflow
+- Split Slack delivery into its own notification-service and added a dedup guard against redelivery
+- Built the ELK logging stack (ILM retention, least-privilege accounts, an auto-imported Kibana dashboard), Uptime Kuma with auto-provisioned monitors, and scheduled/tested MariaDB+Redis backups with an automated DR rehearsal
+- Added the admin bulk data export/import API (JSON/CSV/XML)
+- Reworked `make up` into a single command that builds, starts, health-waits, and seeds the entire stack
+
+Challenges and how they were solved:
+- Slow admin queries: the admin lookup API took about 150ms because of N+1 queries. Using EXPLAIN to find the cause, I applied fetch joins, DTO projection, and a composite index, which brought it down to about 56ms (62% faster).
+- Concurrent rentals: simultaneous requests for the same locker needed a guaranteed winner, so rental/reservation uses pessimistic locking. Coin deduction touches a single record, so it uses optimistic locking to avoid unnecessary overhead. Scheduled jobs (overdue fees, expiry) use ShedLock on Redis to prevent duplicate execution across instances.
+- Unnecessary locks on reads: simple lookups were taking pessimistic locks and blocking each other, so I split them into a lock-free query.
+- Slow external calls: Slack calls were moved off the request path onto a Redis Stream so rentals and returns no longer wait on an external API.
 
 ### seonghan
 
