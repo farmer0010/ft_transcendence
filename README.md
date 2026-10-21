@@ -1,148 +1,422 @@
-# 수박 (Subak) - 사물함 관리 시스템
+*This project has been created as part of the 42 curriculum by juyoukim, seonghan, byoulee, taewonki.*
 
-## 1. 서비스 소개
+# Subak (수박) — Campus Locker Management System
 
-42 경산 캠퍼스의 사물함 대여/반납을 관리하는 서비스입니다. 사용자는 42, 카카오, 구글 OAuth 로 로그인해 사물함을 대여하고 반납하며, 관리자는 사물함 상태와 사용자를 관리합니다. 반납 시 올린 사진은 AI 서버가 비어 있는지 판별해 반납 처리를 돕습니다.
+## Description
 
-실제 서비스는 [https://subak.site](https://subak.site) 에서 이용할 수 있습니다. 로그인이 필요한 기능(대여·반납·예약 등)은 이 사이트에서 체험하는 것을 권장하며, 아래 로컬 실행은 빌드·기동·공개 API 확인 같은 기본 테스트용입니다.
+Subak is a full-stack web application that manages locker rental and return for the 42 Gyeongsan campus. Users sign in with 42, Kakao, or Google OAuth to browse, rent, return, and reserve lockers, while admins manage locker status and user accounts from a dedicated dashboard. When a user returns a locker, the photo they upload is automatically checked by a separate AI image-classification server to confirm the locker is actually empty before the return is finalized.
 
-구성은 세 부분으로 나뉩니다.
+The live service is available at **[https://subak.site](https://subak.site)**. Features that require authentication (renting, returning, reserving, the coin store, the attendance check-in, etc.) are best explored there; the local setup below is intended for building, booting the stack, and exercising the public API.
 
-- **backend**: 대여/반납, 인증, 결제(코인/상점), 알림(슬랙), 통계를 담당하는 API 서버
-- **ai**: 반납 사진으로 사물함이 비었는지 판별하는 이미지 분류 서버 (EfficientNetV2-S 기반)
-- **fe**: React + TypeScript 사용자 화면. 사물함 조회·대여·반납·예약, 내 사물함, 상점, 출석 및 관리자 화면을 제공합니다.
+The project is split into three services:
 
-## 2. 실행 환경 및 필요한 도구·버전
+- **backend** — the API server responsible for rental/return workflows, OAuth authentication, the coin wallet and store, Slack notifications, and admin statistics.
+- **ai** — an image-classification server (EfficientNetV2-S) that decides whether a returned locker is actually empty from the uploaded photo.
+- **fe** — the React + TypeScript web client: locker browsing, rental/return/reservation, "my locker," the coin store, attendance, a watermelon gamification event, and the admin screens.
 
-| 구분 | 버전 |
+### Key features
+
+- Secure sign-in via 42, Kakao, and Google OAuth 2.0 (no local password accounts)
+- Locker browsing, rental, return, and reservation with a shared reservation calendar
+- AI-assisted return verification from a photo, backed by a dedicated microservice
+- A coin wallet, item store, and a "watermelon" gamification event with levels and a leaderboard
+- Daily attendance check-in that rewards users with coins
+- Slack notifications for rental/return/overdue events, driven by a Redis stream
+- An admin dashboard for user, locker, and ban management with usage statistics
+- Prometheus/Grafana monitoring and a Swagger-documented public API
+
+## Instructions
+
+### Prerequisites
+
+| Component | Version |
 |---|---|
 | Java | 17 |
-| Node.js (FE를 호스트에서 개발·빌드할 때) | 22 이상 |
+| Node.js (only needed to develop/build the FE on the host) | 22+ |
 | React / TypeScript / Vite (fe) | 19 / 5.9 / 5 |
 | Spring Boot (backend) | 3.5.8 |
-| Spring Boot (ai/webapp, 테스트용) | 3.2.0 |
+| Spring Boot (ai/webapp test harness) | 3.2.0 |
 | Python | 3.11 |
 | FastAPI | 0.115.6 |
 | PyTorch | 2.2.2 |
 | MariaDB | 10.6 |
 | Redis | alpine (latest) |
-| Docker / Docker Compose | 최신 안정 버전 |
+| Docker / Docker Compose | latest stable |
 
-`make up`은 FE를 Node.js 22 Docker 이미지에서 빌드하므로 호스트에 Node.js가 없어도 됩니다. FE 개발 서버(`make fe`)나 호스트 빌드(`make build`)에는 Node.js 22 이상과 npm이 필요합니다. Docker 없이 실행하려면 Java 17, Python 3.11, MariaDB, Redis도 직접 설치해야 합니다. FE 상세 설정은 [fe/README.md](fe/README.md)를 참고합니다.
+`make up` builds the FE inside a Node.js 22 Docker image, so Node.js is not required on the host for that path. The FE dev server (`make fe`) and a host build (`make build`) do require Node.js 22+ and npm. Running everything without Docker additionally requires installing Java 17, Python 3.11, MariaDB, and Redis yourself. See [fe/README.md](fe/README.md) for FE-specific setup.
 
-## 3. 설치 방법 및 실행 방법
-
-이 저장소는 private 이므로 클론하려면 접근 권한이 필요합니다. Docker/Docker Compose 외에 로컬에 Java 17 이 필요합니다(Gradle Wrapper 로 backend 를 빌드합니다).
+### Running the project
 
 ```bash
 git clone https://github.com/42gyeongsan-hackathon-2026/42.Zip-team12.git
 cd 42.Zip-team12
-make env     # 루트 .env와 fe/.env 생성 (기존 파일은 유지)
-make up      # backend 빌드 → FE 빌드를 포함한 전체 컨테이너 기동
-make seed    # 사물함 304개 시드 (사용자 데이터는 없음)
-make check   # 상태 확인용 API 호출
-make check-fe # FE 화면 + FE 프록시를 통한 공개 API 확인
+make env      # generate root .env and fe/.env (existing files are kept)
+make up       # build backend, build FE, start the full container stack
+make seed     # seed 304 lockers (no user data)
+make check    # call a status API as a smoke test
+make check-fe # verify the FE screen and the FE proxy to the public API
 ```
 
-브라우저에서 **http://localhost:5173**으로 접속합니다. FE의 `/api/v4/*` 요청은 Nginx를 통해 로컬 backend의 `/v4/*`로 전달됩니다. `/lockers` 같은 경로도 직접 열거나 새로고침할 수 있습니다.
+Open **http://localhost:5173** in a browser. FE requests to `/api/v4/*` are proxied through Nginx to the local backend's `/v4/*`. Routes such as `/lockers` can also be opened or refreshed directly.
 
-FE를 수정하면서 실행하려면 전체 스택 기동 후 다음 명령을 사용합니다. FE 컨테이너와 개발 서버는 같은 5173 포트를 사용하므로 컨테이너를 먼저 멈춥니다.
+To develop against the FE while the rest of the stack is running, stop the FE container first (it shares port 5173 with the dev server) and start the dev server:
 
 ```bash
 docker compose stop fe
-make fe      # npm ci → Vite 개발 서버, http://localhost:5173
+make fe       # npm ci, then the Vite dev server on http://localhost:5173
 ```
 
-`make fe`는 FE 개발 서버만 실행하므로 공개 API를 확인하려면 backend도 실행되어 있어야 합니다. backend를 `make run`으로 호스트의 8080 포트에 띄운 경우에는 다른 터미널에서 `FE_API_TARGET=http://localhost:8080 make fe`로 연결합니다. 기본 프록시 대상은 `http://localhost`입니다.
+`make fe` only starts the FE dev server, so the backend must already be running to exercise the public API. If the backend is running on the host via `make run` (port 8080), point the dev server at it from another terminal with `FE_API_TARGET=http://localhost:8080 make fe`. The default proxy target is `http://localhost`.
 
-주요 명령:
+Key `make` targets:
 
-| 명령 | 내용 |
+| Command | Description |
 |---|---|
-| `make build` | backend JAR + FE 타입 검사·프로덕션 빌드 |
-| `make build-fe` | FE 의존성 설치(`npm ci`) + 타입 검사·빌드 |
-| `make logs-fe` | FE 컨테이너 로그 확인 |
-| `make down` | FE를 포함한 전체 컨테이너 종료, 데이터 유지 |
+| `make build` | Build the backend JAR and type-check/build the FE for production |
+| `make build-fe` | Install FE dependencies (`npm ci`) and type-check/build |
+| `make logs-fe` | Tail the FE container logs |
+| `make down` | Stop every container, including FE, keeping data |
 
-`make` 없이 직접 실행하는 방법, 컨테이너 없이 로컬에서 띄우는 방법, 개별 서비스 세부 설정은 각 폴더의 README 를 참고합니다.
+For running services without `make`, running locally without containers, or per-service configuration, see each folder's README:
 
-- backend 상세: [backend/README.md](backend/README.md)
-- ai 상세: [ai/README.md](ai/README.md) (이 서버는 [42-Gy/ft_cabinet_AI](https://github.com/42-Gy/ft_cabinet_AI) 기반입니다)
-- 프론트엔드 상세: [fe/README.md](fe/README.md)
+- Backend: [backend/README.md](backend/README.md)
+- AI service: [ai/README.md](ai/README.md) (based on [42-Gy/ft_cabinet_AI](https://github.com/42-Gy/ft_cabinet_AI))
+- Frontend: [fe/README.md](fe/README.md)
 
-## 4. 환경 변수 설정 방법
+### Environment variables
 
 ```bash
 cp .env.example .env
 cp fe/.env.example fe/.env
 ```
 
-`make env`로도 두 파일을 생성할 수 있습니다. `.env.example`의 비밀값은 자리표시자이며, 실제 값은 Git에서 제외되는 `.env`에 작성합니다. 필수 항목은 DB 계정/비밀번호, JWT 시크릿, 42/카카오/구글 OAuth 클라이언트 정보, 슬랙 봇 토큰, Azure Blob Storage 연결 문자열, AI 모델 경로(`AI_MODEL_PATH`)입니다. `#`으로 시작하는 줄은 선택 항목이며 적힌 값이 기본값입니다. 변수별 설명은 `.env.example` 안의 주석과 [backend/README.md](backend/README.md)를 참고합니다.
+`make env` generates both files as well. Values in `.env.example` are placeholders; real values belong in the git-ignored `.env`. Required variables include DB credentials, the JWT secret, 42/Kakao/Google OAuth client credentials, the Slack bot token, the Azure Blob Storage connection string, and the AI model path (`AI_MODEL_PATH`). Lines starting with `#` are optional and already show their default. See the comments in `.env.example` and [backend/README.md](backend/README.md) for details on each variable.
 
-FE 개발 서버는 `fe/.env`를 읽습니다. 기본값 `VITE_API_BASE_URL=/api`, `VITE_USE_MOCK=false`로 로컬 API를 사용합니다. `VITE_*` 값은 브라우저 번들에 포함되므로 비밀키를 넣지 않습니다. FE 컨테이너는 `fe/.env.example`의 로컬 설정으로 빌드하며 개인 `fe/.env`는 Docker 이미지에 포함하지 않습니다. 세부 변수는 [fe/README.md](fe/README.md)를 참고합니다.
+The FE dev server reads `fe/.env`. By default it uses the local API with `VITE_API_BASE_URL=/api` and `VITE_USE_MOCK=false`. `VITE_*` values end up in the browser bundle, so secrets never go there. The FE container is built from `fe/.env.example`; a personal `fe/.env` is never baked into the Docker image. See [fe/README.md](fe/README.md) for the full variable list.
 
-자리표시자를 그대로 둔 채 로컬에서 실행하면 다음 값이 적용됩니다.
+Running locally with placeholders left as-is applies these effective values:
 
 - `REDIS_PORT=6379`
 - `FRONTEND_URL=http://localhost:5173`
 - `COOKIE_SECURE=false`
 - `AI_MODEL_PATH=models/efficientnetv2s_3class_traced_v2.0.0.pt`
 
-기본 FE 주소 `http://localhost:5173`은 backend의 CORS 허용 목록에 포함되어 있습니다. 기존 `.env`를 재사용한다면 `FRONTEND_URL=http://localhost:5173`으로 변경합니다.
+The default FE origin `http://localhost:5173` is already in the backend's CORS allow-list. If you are reusing an existing `.env`, update `FRONTEND_URL` to that value.
 
-외부 서비스 값(42/카카오/구글 클라이언트, 슬랙 봇 토큰, Azure 연결 문자열)을 자리표시자로 둬도 `make up` 은 끝까지 됩니다. 다만 아래 기능은 동작하지 않습니다.
+`make up` finishes successfully even with placeholder values for 42/Kakao/Google client credentials, the Slack bot token, and the Azure connection string, but the following features will not work:
 
-| 기능 | 자리표시자로 동작 여부 | 이유 |
+| Feature | Works with placeholders? | Reason |
 |---|---|---|
-| 42/카카오/구글 로그인 | 아니오 | 로그인 시도 시 실제 제공자로 리다이렉트되지만 client-id/secret 이 가짜라 제공자 쪽에서 인증에 실패합니다. |
-| 슬랙 알림 | 아니오 | 토큰은 기동 시점에 검증하지 않지만, 실제 슬랙 API 호출 시점에 인증 오류로 실패합니다. |
-| 반납 사진 업로드 | 아니오 | Azure Blob 클라이언트 생성 자체는 기동에 영향을 주지 않지만, 실제 업로드 시점에 가짜 자격 증명으로 실패합니다. |
+| 42 / Kakao / Google login | No | The redirect to the real provider happens, but the fake client ID/secret fails authentication on the provider's side. |
+| Slack notifications | No | The token isn't validated at boot, but real Slack API calls fail authentication. |
+| Return-photo upload | No | Creating the Azure Blob client doesn't block boot, but the actual upload fails with fake credentials. |
 
-자리표시자 상태에서는 사물함 조회·현황 같은 공개 API만 확인할 수 있고, 대여·반납·연장 등은 OAuth 로그인이 필요합니다.
+With placeholders in place, only public endpoints such as locker listing/status work; renting, returning, and extending require OAuth login.
 
-루트 `docker-compose.yml` 이 `backend` 서비스에 명시적으로 넘기지 않는 변수(`SLACK_NOTICE_*`, `SLACK_REPORT_*`, `GEMINI_API_KEY`, `APP_AUTH_COOKIE_SECURE` 등 선택 기능 변수)는 `.env` 에 값을 채워도 `make up` 으로 띄운 컨테이너에는 적용되지 않습니다.
+The root `docker-compose.yml` does not forward every optional variable to the `backend` service (e.g. `SLACK_NOTICE_*`, `SLACK_REPORT_*`, `GEMINI_API_KEY`, `APP_AUTH_COOKIE_SECURE`) — setting them in `.env` has no effect on containers started with `make up`.
 
-루트 `.env.example`은 로컬 데모용이며 위 `docker-compose.yml`과 변수 구성이 일치합니다. `backend/.env.example`은 운영 프로파일(외부 관리형 DB·SSL Redis) 참고용이며 로컬 compose 에는 쓰지 않습니다.
+The root `.env.example` matches the local `docker-compose.yml` for demo purposes. `backend/.env.example` documents the production profile (externally managed DB, SSL Redis) and is not used by the local compose setup.
 
-## 5. 접속·확인 방법
+### Accessing and verifying the stack
 
-`make up` 으로 전체 스택을 띄운 뒤:
+Once `make up` has started the full stack:
 
 - API: `http://localhost`
-- 로컬 프론트엔드: `http://localhost:5173`
+- Local frontend: `http://localhost:5173`
 - Swagger: `http://localhost/swagger-ui/index.html`
 - Grafana: `http://localhost:3000` (admin / admin)
-- AI 서버 상태: `make check-ai` (컨테이너 내부 네트워크 전용, 호스트에는 `127.0.0.1:8000` 으로만 열림)
-- 사물함 현황(로그인 불필요): `curl http://localhost/v4/cabinets/status-summary/all` (`make check` 와 같은 호출입니다)
-- 배포 주소: https://subak.site
+- AI service health: `make check-ai` (only reachable on the internal Docker network, exposed on the host as `127.0.0.1:8000`)
+- Locker status summary (no login required): `curl http://localhost/v4/cabinets/status-summary/all` (same call as `make check`)
+- Deployed instance: https://subak.site
 
-로그인 없이 확인 가능한 것은 `GET /v4/cabinets`, `GET /v4/cabinets/{id}`, `GET /v4/cabinets/status-summary`, `GET /v4/cabinets/status-summary/all`, Swagger 뿐입니다. 나머지 `/v4/**` 는 42/카카오/구글 OAuth 로그인이 필요하고, `/v4/admin/**` 와 `/actuator/**` 는 ADMIN 권한이 필요합니다.
+The only endpoints usable without logging in are `GET /v4/cabinets`, `GET /v4/cabinets/{id}`, `GET /v4/cabinets/status-summary`, `GET /v4/cabinets/status-summary/all`, and Swagger. Every other `/v4/**` endpoint requires 42/Kakao/Google OAuth login, and `/v4/admin/**` plus `/actuator/**` require the ADMIN role.
 
-로그인은 42/카카오/구글 OAuth 뿐이며, 별도의 테스트 계정은 제공하지 않습니다. 시드는 사물함 데이터뿐이고 로그인 계정은 없습니다.
+Login only works through 42/Kakao/Google OAuth; no test accounts are provided, and the seed data contains only lockers, not accounts.
 
-로컬에서 로그인하려면 실제 OAuth 클라이언트 값을 설정하고 각 OAuth 앱에 redirect URI를 `{FRONTEND_URL}/login/oauth2/code/{42|kakao|google}` 형식으로 등록해야 합니다(기본값 기준 `http://localhost:5173/login/oauth2/code/42` 등). Compose와 `make run`은 backend의 OAuth redirect URI를 이 주소로 덮어씁니다. FE의 `/oauth2/*`, `/login/oauth2/*`는 backend로 프록시됩니다. `FRONTEND_URL`과 등록한 주소가 한 글자라도 다르면 로그인이 실패합니다.
+To log in locally, register real OAuth client credentials and set each provider's redirect URI to `{FRONTEND_URL}/login/oauth2/code/{42|kakao|google}` (by default `http://localhost:5173/login/oauth2/code/42`, etc.). Compose and `make run` override the backend's OAuth redirect URI to this address. The FE proxies `/oauth2/*` and `/login/oauth2/*` to the backend. Login fails if `FRONTEND_URL` doesn't match the registered redirect URI exactly.
 
----
+### Folder structure
 
-## 폴더 구조
-
-| 폴더 | 내용 |
+| Folder | Content |
 |---|---|
-| `backend/` | API 서버 (Spring Boot) |
-| `ai/` | 이미지 분류 서버 (FastAPI + PyTorch), 테스트용 웹앱 포함 |
-| `fe/` | 웹 프론트엔드 (React + TypeScript + Vite), Docker/Nginx 설정 포함 |
+| `backend/` | API server (Spring Boot) |
+| `ai/` | Image classification server (FastAPI + PyTorch), including a test webapp |
+| `fe/` | Web frontend (React + TypeScript + Vite), with Docker/Nginx configuration |
 
-## 구조도
+### Architecture
 
 ```mermaid
 flowchart LR
-    User[사용자 브라우저] --> Frontend[fe :5173 웹 프론트엔드]
-    Frontend -->|/api 및 OAuth 프록시| Nginx[nginx :80]
+    User[User's browser] --> Frontend[fe :5173 web client]
+    Frontend -->|/api and OAuth proxy| Nginx[nginx :80]
     Nginx --> Backend[backend : Spring Boot]
     Backend --> MariaDB[(MariaDB)]
     Backend --> Redis[(Redis)]
-    Backend --> AI[ai : FastAPI 분류 서버]
-    Backend --> Slack[Slack 알림]
+    Backend --> AI[ai : FastAPI classifier]
+    Backend --> Slack[Slack notifications]
     Prometheus[prometheus] --> Backend
     Grafana[grafana :3000] --> Prometheus
 ```
+
+## Team Information
+
+| Member | Role(s) | Responsibilities |
+|---|---|---|
+| **juyoukim** | Technical Lead, Backend & Infrastructure Developer | Backend architecture, API design, database integration, OAuth/auth logic, Docker/Nginx deployment, monitoring setup |
+| **seonghan** | Project Manager, Frontend Developer, AI Developer | Sprint planning and scheduling, frontend feature screens, the AI return-verification model and service |
+| **byoulee** | Project Manager, Frontend Developer | Task tracking and scheduling, frontend feature screens, UI consistency |
+| **taewonki** | Documentation / QA | Documentation upkeep, issue tracking, release validation |
+
+## Project Management
+
+The team split work along backend/infrastructure, frontend, AI, and documentation lines, with the two frontend developers sharing project-management duties (scheduling, task tracking, and keeping the team unblocked).
+
+- **Task & schedule tracking**: Notion, used for planning boards, decisions, and documentation drafts
+- **Day-to-day communication**: Slack, for async updates and quick questions
+- **Meetings**: Discord, for voice stand-ups and pairing sessions
+- **Code review**: Git/GitHub, through feature branches and pull requests
+- **Delivery model**: backend, frontend, and AI work proceeded in parallel and were integrated through shared API contracts, with documentation kept up to date alongside implementation
+
+## Technical Stack
+
+### Frontend
+
+- React 19, TypeScript, Vite
+- Feature-sliced structure (`features/`, `components/atoms|molecules|organisms|templates`)
+
+**Why this choice:** React's component model keeps a growing number of screens (lockers, calendar, store, attendance, admin) organized, TypeScript catches integration errors against the backend's API contracts early, and Vite keeps local iteration fast.
+
+### Backend
+
+- Java 17, Spring Boot 3.5.8, a hexagonal (ports & adapters) package structure
+- Spring Data JPA, Spring Security, Resilience4j (rate limiting), springdoc-openapi (Swagger UI)
+- Redis for caching, distributed locks (ShedLock), and a Pub/Sub stream that drives Slack notifications
+
+**Why this choice:** Spring Boot's ecosystem covers authentication, validation, scheduling, and rate limiting out of the box, and the hexagonal structure keeps domain logic (lockers, rentals, coins, the watermelon event) independent from persistence and web adapters as the feature set grew.
+
+### AI service
+
+- Python 3.11, FastAPI, PyTorch, an EfficientNetV2-S image classifier
+
+**Why this choice:** Running the classifier as its own FastAPI service keeps the heavier ML runtime isolated from the main API server, so it can be scaled, updated, or swapped independently.
+
+### Database and cache
+
+- MariaDB 10.6
+- Redis
+
+**Why this choice:** MariaDB models users, lockers, coin/item history, and the watermelon event with clear relational constraints; Redis provides fast caching, distributed locking for concurrent rentals, and the stream backing the notification pipeline.
+
+### Infrastructure and tooling
+
+- Docker / Docker Compose, Nginx, a Makefile for local automation
+- Prometheus + Grafana for monitoring
+
+**Why this choice:** Docker Compose gives the whole stack (DB, cache, AI service, backend, FE, reverse proxy) a single-command local setup, Nginx routes the FE, API, and OAuth callbacks consistently, and Prometheus/Grafana give visibility into the running service.
+
+## Database Schema
+
+```mermaid
+erDiagram
+    USERS ||--o{ OAUTH_LINKS : links
+    USERS ||--o{ LENT_HISTORIES : rents
+    USERS ||--o{ COIN_HISTORIES : earns_or_spends
+    USERS ||--o{ ITEM_HISTORIES : purchases
+    USERS ||--o{ CALENDAR_EVENTS : announces
+    USERS ||--o{ ATTENDANCES : checks_in
+    USERS ||--|| WATERMELONS : grows
+    USERS ||--o{ WATERMELON_EVENT_LOGS : triggers
+    CABINETS ||--o{ LENT_HISTORIES : is_rented_as
+    ITEMS ||--o{ ITEM_HISTORIES : is_purchased_as
+
+    USERS {
+        bigint id PK
+        varchar name
+        varchar email
+        enum role
+        bigint coin
+        int penalty_days
+        int monthly_logtime
+        boolean is_pisciner
+        timestamp blackholed_at
+    }
+
+    OAUTH_LINKS {
+        bigint id PK
+        bigint user_id FK
+        varchar provider
+        varchar provider_id
+        varchar provider_email
+        timestamp linked_at
+    }
+
+    CABINETS {
+        bigint id PK
+        int visible_num
+        enum status
+        enum lent_type
+        int max_user
+        int floor
+        varchar section
+    }
+
+    LENT_HISTORIES {
+        bigint id PK
+        bigint user_id FK
+        bigint cabinet_id FK
+        timestamp started_at
+        timestamp expired_at
+        timestamp ended_at
+        varchar photo_url
+        boolean is_auto_extension
+    }
+
+    COIN_HISTORIES {
+        bigint id PK
+        bigint user_id FK
+        bigint amount
+        enum type
+        timestamp created_at
+    }
+
+    ITEMS {
+        bigint id PK
+        varchar name
+        enum type
+        bigint price
+    }
+
+    ITEM_HISTORIES {
+        bigint id PK
+        bigint user_id FK
+        bigint item_id FK
+        timestamp purchase_at
+        timestamp used_at
+    }
+
+    CALENDAR_EVENTS {
+        bigint id PK
+        varchar title
+        date event_date
+        bigint announcer_id FK
+    }
+
+    ATTENDANCES {
+        bigint id PK
+        bigint user_id FK
+        date attendance_date
+    }
+
+    WATERMELONS {
+        bigint user_id PK, FK
+        int current_level
+        int highest_level
+        int total_attempts
+        int total_successes
+    }
+
+    WATERMELON_EVENT_LOGS {
+        bigint id PK
+        bigint user_id FK
+        int before_level
+        int after_level
+        varchar final_outcome
+        int cost_seeds
+    }
+```
+
+### Core tables
+
+- `users`: identity, OAuth-linked role, coin balance, and 42-campus metadata (penalty days, blackhole status)
+- `oauth_links`: 42/Kakao/Google provider links per user
+- `cabinets`: locker metadata, status, and position
+- `lent_histories`: rental/return records, including the uploaded return photo
+- `coin_histories`: ledger of coin earnings (attendance, watermelon event) and spending (store, admin grants)
+- `items` / `item_histories`: the store catalog and each user's purchases
+- `calendar_events`: reservation/announcement calendar entries
+- `attendances`: daily check-in records
+- `watermelons` / `watermelon_event_logs`: per-user gamification state and the history of each level-up attempt
+
+## Features List
+
+| Feature | Description | Team member(s) |
+|---|---|---|
+| OAuth login | Sign-up/sign-in via 42, Kakao, or Google, with role-based access | juyoukim |
+| Locker browsing & status | Public locker listing and live status summary | juyoukim, byoulee |
+| Rental, return & reservation | Rent/return lockers, extend rentals, reserve via a shared calendar | juyoukim, seonghan, byoulee |
+| AI-assisted return verification | A photo taken on return is checked by a dedicated classifier before the return is accepted | seonghan |
+| Coin wallet & store | Earn coins through attendance/events and spend them on store items | juyoukim, byoulee |
+| Attendance check-in | Daily check-in rewarded with coins, tracked in admin statistics | juyoukim, seonghan |
+| Watermelon gamification event | A level-up mini-game with protections/fertilizers, backed by a leaderboard | juyoukim, seonghan |
+| Admin dashboard | User, locker, and ban management with usage statistics | juyoukim, byoulee |
+| Slack notifications | Rental/return/overdue events pushed to Slack via a Redis stream | juyoukim |
+| Monitoring | Backend metrics visualized through Prometheus and Grafana dashboards | juyoukim |
+| Public API | Swagger-documented REST API, authenticated and rate-limited | juyoukim |
+
+## Modules
+
+| Module | Type | Points | Justification | Implementation | Team member(s) |
+|---|---|---|---|---|---|
+| Framework for both frontend and backend | Major | 2 | Clean separation between the UI and the API/domain logic | React + TypeScript frontend, Spring Boot backend | juyoukim, seonghan, byoulee |
+| Advanced permissions system | Major | 2 | Admin-only actions (user/locker/ban management) need to be isolated from regular users | Role-based Spring Security rules, an admin dashboard restricted to the `ADMIN` role | juyoukim, byoulee |
+| Public API with security and validation | Major | 2 | The locker/rental/store domain is exposed as a documented, protected API | Spring Security-protected REST endpoints, Resilience4j rate limiting, springdoc/Swagger documentation | juyoukim |
+| Monitoring system (Prometheus + Grafana) | Major | 2 | A service handling real rentals needs visibility into health and load | Prometheus metrics scraping and Grafana dashboards wired into the Compose stack | juyoukim |
+| Custom module: AI-based return verification | Major | 2 | Deciding automatically whether a locker photo shows it empty is a non-trivial ML problem, solved by a dedicated, independently deployed microservice rather than a simple rule; it directly gates the return workflow | A separate FastAPI/PyTorch service running an EfficientNetV2-S image classifier, called by the backend during the return flow | seonghan |
+| Use an ORM for database access | Minor | 1 | Improves code quality and maintainability | Spring Data JPA entities and repositories | juyoukim |
+| Remote authentication with OAuth 2.0 | Minor | 1 | Campus users already have 42/Kakao/Google accounts; a modern, secure external sign-in flow avoids password handling altogether | 42/Kakao/Google OAuth2 login and account linking | juyoukim |
+| Notification system | Minor | 1 | Users and admins need to know about rental/return/overdue events without polling the app | Redis Stream events consumed by a Slack bot | juyoukim |
+| Gamification system | Minor | 1 | Encourages daily engagement beyond the core rental flow | Watermelon leveling with a leaderboard, daily attendance check-ins, and coin rewards spendable in the store | juyoukim, seonghan |
+
+### Module score
+
+- Major modules: 5 x 2 = 10 points
+- Minor modules: 4 x 1 = 4 points
+- **Total: 14 points**
+
+## Resources
+
+### Reference material
+
+- Spring Boot Documentation: https://docs.spring.io/spring-boot/
+- Spring Security Documentation: https://docs.spring.io/spring-security/
+- React Documentation: https://react.dev/
+- Vite Documentation: https://vite.dev/
+- FastAPI Documentation: https://fastapi.tiangolo.com/
+- PyTorch Documentation: https://pytorch.org/docs/
+- Redis Documentation: https://redis.io/docs/
+- MariaDB Documentation: https://mariadb.com/kb/en/
+
+### AI usage
+
+AI tools were used to support documentation organization and technical research during the project — structuring this README, and looking up library/framework usage while implementing backend and infrastructure features. All AI-assisted output was reviewed and verified by the team before being used.
+
+## Individual Contributions
+
+### juyoukim
+
+- Designed the backend's hexagonal architecture and the API for lockers, rentals, the coin store, the calendar, and admin features
+- Implemented 42/Kakao/Google OAuth login and role-based access control
+- Built the Redis-backed caching, distributed locking, and the event stream powering Slack notifications
+- Set up Docker Compose, Nginx routing, and the Prometheus/Grafana monitoring stack, and integrated the AI service into the return workflow
+
+### seonghan
+
+- Trained and packaged the EfficientNetV2-S image-classification model used to verify returned lockers, and built the FastAPI service that serves it
+- Implemented frontend feature screens and contributed to the attendance and watermelon event UI
+- Planned sprints and coordinated scheduling as project manager
+
+### byoulee
+
+- Implemented frontend feature screens, including locker browsing/rental, the store, and admin views
+- Contributed to UI consistency and shared component structure
+- Tracked tasks and coordinated scheduling as project manager
+
+### taewonki
+
+- Maintained project documentation, including setup guides and this README
+- Tracked issues and verified release readiness across features
+- Supported quality checks and edge-case validation before releases
+
+## Notes
+
+This project focuses on a real operational need of the 42 Gyeongsan campus — locker scarcity and manual return verification — rather than a purely academic exercise, which is why features like AI-assisted return checks, Slack alerts, and admin tooling were prioritized alongside the standard rental flow.
