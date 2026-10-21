@@ -75,6 +75,8 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers("/v4/admin/**")
                                         .hasRole("ADMIN")
+                                        .requestMatchers("/actuator/health", "/actuator/prometheus")
+                                        .permitAll()
                                         .requestMatchers("/actuator/**")
                                         .hasRole("ADMIN")
                                         .requestMatchers("/v4/**")

@@ -5,7 +5,7 @@
 USE cabi;
 
 -- Cabinet 데이터 (304개)
-INSERT INTO cabinet (id, grid_col, floor, lent_type, max_user, grid_row, section, status, status_note, visible_num) VALUES 
+INSERT IGNORE INTO cabinet (id, grid_col, floor, lent_type, max_user, grid_row, section, status, status_note, visible_num) VALUES
 (1, 1, 2, 'PRIVATE', 1, 1, 'Section 1', 'BROKEN', '', 2045),
 (2, 1, 2, 'PRIVATE', 1, 1, 'Section 1', 'AVAILABLE', null, 2046),
 (3, 1, 2, 'PRIVATE', 1, 1, 'Section 1', 'AVAILABLE', null, 2047),
