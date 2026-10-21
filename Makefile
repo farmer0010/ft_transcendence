@@ -59,12 +59,15 @@ fe: install-fe
 up: build-backend build-notification
 	$(COMPOSE) up -d --build --wait --wait-timeout 180 $(SERVICES)
 	$(COMPOSE) up --build $(INIT_SERVICES)
+	@$(MAKE) --no-print-directory seed
 	@$(MAKE) --no-print-directory check-fe
 	@echo "기동했습니다."
-	@echo "  FE       http://localhost:5173"
-	@echo "  API      http://localhost"
-	@echo "  Swagger  http://localhost/swagger-ui/index.html"
-	@echo "  Grafana  http://localhost:3000 (admin / admin)"
+	@echo "  FE            http://localhost:5173"
+	@echo "  API           http://localhost"
+	@echo "  Swagger       http://localhost/swagger-ui/index.html"
+	@echo "  Grafana       http://localhost:3000 (admin / admin)"
+	@echo "  Kibana        http://localhost:5601"
+	@echo "  Uptime Kuma   http://localhost:3001"
 
 seed: env
 	@set -a; . ./.env; set +a; \
