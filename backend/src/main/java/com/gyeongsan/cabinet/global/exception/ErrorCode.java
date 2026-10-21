@@ -57,7 +57,12 @@ public enum ErrorCode {
     PISCINER_EXTENSION_RESTRICTED(HttpStatus.FORBIDDEN, "LENT_011", "피시너는 대여 기간을 연장할 수 없습니다."),
     RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "LENT_012", "취소할 예약이 없습니다."),
 
-    REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "LOCK_001", "현재 처리 중인 요청입니다. 잠시 후 다시 시도해주세요.");
+    REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "LOCK_001", "현재 처리 중인 요청입니다. 잠시 후 다시 시도해주세요."),
+
+    INVALID_EXPORT_FORMAT(
+            HttpStatus.BAD_REQUEST, "DATA_001", "지원하지 않는 export 포맷입니다. (json, csv, xml 중 하나)"),
+    IMPORT_FILE_EMPTY(HttpStatus.BAD_REQUEST, "DATA_002", "업로드한 파일이 비어 있습니다."),
+    IMPORT_FILE_PARSE_FAILED(HttpStatus.BAD_REQUEST, "DATA_003", "파일을 읽을 수 없습니다. 형식을 확인해주세요.");
 
     private final HttpStatus status;
     private final String code;

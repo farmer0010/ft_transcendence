@@ -102,4 +102,9 @@ public class LentPersistenceAdapter implements LentRepositoryPort {
     public LentHistory save(LentHistory lentHistory) {
         return lentRepository.save(lentHistory);
     }
+
+    @Override
+    public List<LentHistory> findAll() {
+        return lentRepository.findAll();
+    }
 }

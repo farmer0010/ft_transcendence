@@ -18,6 +18,8 @@ public interface CabinetRepositoryPort {
 
     List<Cabinet> findAll();
 
+    List<Cabinet> saveAll(List<Cabinet> cabinets);
+
     List<Cabinet> findAllById(List<Long> ids);
 
     List<Cabinet> findAllByFloor(Integer floor);

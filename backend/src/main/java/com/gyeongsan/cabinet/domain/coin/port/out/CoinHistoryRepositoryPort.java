@@ -14,4 +14,6 @@ public interface CoinHistoryRepositoryPort {
     List<Object[]> sumIssuedAndUsedBetween(LocalDateTime start, LocalDateTime end);
 
     long countByTypeAndCreatedAtBetween(CoinLogType type, LocalDateTime start, LocalDateTime end);
+
+    List<CoinHistory> findAll();
 }

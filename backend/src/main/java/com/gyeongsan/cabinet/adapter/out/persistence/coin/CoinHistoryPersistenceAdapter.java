@@ -34,4 +34,9 @@ public class CoinHistoryPersistenceAdapter implements CoinHistoryRepositoryPort 
             CoinLogType type, LocalDateTime start, LocalDateTime end) {
         return coinHistoryRepository.countByTypeAndCreatedAtBetween(type, start, end);
     }
+
+    @Override
+    public List<CoinHistory> findAll() {
+        return coinHistoryRepository.findAll();
+    }
 }

@@ -42,4 +42,6 @@ public interface LentRepositoryPort {
     long countLentsEndedAtBetween(LocalDateTime start, LocalDateTime end);
 
     LentHistory save(LentHistory lentHistory);
+
+    List<LentHistory> findAll();
 }

@@ -41,6 +41,11 @@ public class CabinetPersistenceAdapter implements CabinetRepositoryPort {
     }
 
     @Override
+    public List<Cabinet> saveAll(List<Cabinet> cabinets) {
+        return cabinetRepository.saveAll(cabinets);
+    }
+
+    @Override
     public List<Cabinet> findAllById(List<Long> ids) {
         return cabinetRepository.findAllById(ids);
     }
