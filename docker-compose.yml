@@ -121,6 +121,122 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: cabi_elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    mem_limit: 1200m
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    expose:
+      - "9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -u elastic:$$ELASTIC_PASSWORD http://localhost:9200/_cluster/health | grep -Eq '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  elk-setup:
+    image: curlimages/curl:8.10.1
+    container_name: cabi_elk_setup
+    restart: "no"
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - KIBANA_SYSTEM_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+      - LOGSTASH_WRITER_PASSWORD=${LOGSTASH_WRITER_PASSWORD}
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
+    volumes:
+      - ./elk/setup/setup.sh:/setup.sh:ro
+    entrypoint: ["sh", "/setup.sh"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.3
+    container_name: cabi_logstash
+    restart: always
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+      - LOGSTASH_ES_USER=logstash_writer
+      - LOGSTASH_ES_PASSWORD=${LOGSTASH_WRITER_PASSWORD}
+    mem_limit: 768m
+    volumes:
+      - ./elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+      - nginx_logs:/var/log/nginx-app:ro
+      - logstash_data:/usr/share/logstash/data
+    expose:
+      - "5000"
+      - "9600"
+    depends_on:
+      elk-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9600 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: cabi_kibana
+    restart: always
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_SYSTEM_PASSWORD}
+    mem_limit: 1024m
+    ports:
+      - "5601:5601"
+    depends_on:
+      elk-setup:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kibana-setup:
+    image: curlimages/curl:8.10.1
+    container_name: cabi_kibana_setup
+    restart: "no"
+    environment:
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    volumes:
+      - ./elk/kibana/saved_objects:/saved_objects:ro
+      - ./elk/kibana/import.sh:/import.sh:ro
+    entrypoint: ["sh", "/import.sh"]
+    depends_on:
+      kibana:
+        condition: service_healthy
+
   notification-service:
     container_name: cabi_notification
     build: ./notification-service
@@ -155,6 +271,7 @@ services:
       - "80:80"
     volumes:
       - ./backend/nginx/conf.d:/etc/nginx/conf.d
+      - nginx_logs:/var/log/nginx
     depends_on:
       backend:
         condition: service_healthy
@@ -301,3 +418,6 @@ services:
 volumes:
   grafana_data:
   uptime_kuma_data:
+  nginx_logs:
+  es_data:
+  logstash_data:

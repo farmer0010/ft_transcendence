@@ -1,5 +1,9 @@
 COMPOSE ?= docker compose
-SERVICES := mariadb redis ai backend notification-service nginx fe prometheus grafana backup uptime-kuma uptime-kuma-init
+# Long-running, health-checked services. Kept separate from the one-shot init
+# containers below because `docker compose up --wait` misreports failure when
+# more than one one-shot ("restart: no") container exits 0 in the same batch.
+SERVICES := mariadb redis ai backend notification-service nginx fe prometheus grafana backup uptime-kuma elasticsearch logstash kibana
+INIT_SERVICES := uptime-kuma-init elk-setup kibana-setup
 NPM ?= npm
 JDBC_LOCAL := jdbc:mariadb://127.0.0.1:13306/cabi?serverTimezone=Asia/Seoul&useUnicode=true&characterEncoding=UTF-8&useSSL=false
 
@@ -54,6 +58,7 @@ fe: install-fe
 
 up: build-backend build-notification
 	$(COMPOSE) up -d --build --wait --wait-timeout 180 $(SERVICES)
+	$(COMPOSE) up --build $(INIT_SERVICES)
 	@$(MAKE) --no-print-directory check-fe
 	@echo "기동했습니다."
 	@echo "  FE       http://localhost:5173"

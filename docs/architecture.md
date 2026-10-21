@@ -66,3 +66,18 @@ Consumer group: `cabinet-backend-group` (unchanged name, so any pending/unacked 
 The backend's existing ports/adapters structure is preserved: `AlarmPort` (domain port, `com.gyeongsan.cabinet.domain.alarm.port.out`) is still implemented by `SlackAlarmAdapter` (`adapter/out/external/slack`) — only the adapter's internals changed (it publishes an event instead of calling a service method directly). Domain code (`AdminAlarmService`) has zero knowledge that Slack delivery moved to another process.
 
 notification-service is intentionally not structured as a hexagonal app — it is a thin, single-purpose consumer (read a stream, call one external API) where that structure would add indirection without a corresponding benefit.
+
+## Logging (ELK)
+
+| Source | Collection method | Why |
+|---|---|---|
+| `backend` | `logstash-logback-encoder`'s `LogstashTcpSocketAppender`, streaming JSON to `logstash:5000` | The app already runs in a JVM we fully control; a TCP appender is async/non-blocking (buffers and reconnects if Logstash is down, never blocks request handling) and avoids any file-sharing or Docker-daemon networking quirks. |
+| `notification-service` | Same TCP appender, `service: "notification-service"` | Same reasoning, same mechanism. |
+| `nginx` | `log_format json_combined` (in `backend/nginx/conf.d/default.conf`) writing to a shared `nginx_logs` volume, tailed by a Logstash `file` input | Docker's built-in logging drivers (`gelf`, `syslog`, etc.) run in the Docker **daemon's** network namespace, not the container's, so they cannot resolve compose service DNS names like `logstash` — only a host IP:port would work, which would mean publishing a port just for log shipping. File-tailing a shared volume avoids that entirely and needed no Dockerfile changes (the official nginx image already lets you point `access_log`/`error_log` at a custom path). |
+| `ai` | **Not collected** | The service only uses bare `print()` / uvicorn's default stdout logger today, with no structured or file-based output. Collecting it would mean either mounting the host's Docker log directory into Logstash (fragile: tied to container IDs that change on every recreate) or adding real Python logging to `ai/` first. Left out of scope for this iteration rather than faked; the nginx file-tailing pattern above is the template to follow if/when this is picked up. |
+
+Every structured log entry carries `service`, `level`, and (for backend requests) a per-request `traceId` set by `TraceIdFilter` and propagated through MDC — see `backend/src/main/java/com/gyeongsan/cabinet/common/logging/TraceIdFilter.java`.
+
+**Retention/archiving**: an ILM policy (`app-logs-ilm-policy`, set up by `elk/setup/setup.sh`) rolls the write index over at 1 day/1GB and deletes indices older than `LOG_RETENTION_DAYS` (default 30). This project does **not** implement cold-storage snapshot archiving beyond that window — doing so would need a configured snapshot repository (e.g. object storage), which wasn't set up here. The 30-day delete-on-expiry policy is the only retention mechanism in place; treat "archiving" as a known gap, not a shipped feature.
+
+**Security**: `xpack.security` is enabled on Elasticsearch with HTTP SSL disabled (internal-network-only, not required for a single-node dev-scale deployment). Three accounts exist: `elastic` (superuser, also used to log into Kibana), `kibana_system` (built-in, used only by Kibana to talk to ES), and `logstash_writer` (custom role, write-only access to `app-logs*` indices — Logstash never uses the superuser). Only Kibana's port (5601) is published to the host; Elasticsearch, Logstash's TCP/HTTP ports, and the nginx log volume are reachable only on the internal Docker network.

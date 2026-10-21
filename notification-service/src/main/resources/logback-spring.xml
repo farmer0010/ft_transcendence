@@ -6,7 +6,16 @@
         </encoder>
     </appender>
 
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH_HOST:-logstash}:${LOGSTASH_PORT:-5000}</destination>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"notification-service"}</customFields>
+        </encoder>
+        <keepAliveDuration>5 minutes</keepAliveDuration>
+    </appender>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="LOGSTASH"/>
     </root>
 </configuration>

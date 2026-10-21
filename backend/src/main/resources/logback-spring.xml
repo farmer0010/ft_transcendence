@@ -26,8 +26,23 @@
         </encoder>
     </appender>
 
+    <springProfile name="!test">
+        <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+            <destination>${LOGSTASH_HOST:-logstash}:${LOGSTASH_PORT:-5000}</destination>
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"backend"}</customFields>
+            </encoder>
+            <!-- Non-blocking: if logstash is unreachable this buffers/drops
+                 instead of slowing down or failing request handling. -->
+            <keepAliveDuration>5 minutes</keepAliveDuration>
+        </appender>
+    </springProfile>
+
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
+        <springProfile name="!test">
+            <appender-ref ref="LOGSTASH"/>
+        </springProfile>
     </root>
 </configuration>
